@@ -41,7 +41,11 @@ describe('application infrastructure components', () => {
 
   it('registers the service worker and provides query context to children', () => {
     const register = vi.fn(() => Promise.resolve({}));
-    Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { register } });
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { register, getRegistrations: vi.fn(() => Promise.resolve([])) },
+    });
+    vi.stubEnv('NODE_ENV', 'production');
     render(
       <>
         <OfflineServiceWorker />

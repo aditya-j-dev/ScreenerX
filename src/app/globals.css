@@ -5,11 +5,11 @@
   box-sizing: border-box;
 }
 html {
-  background: #020617;
+  background: #000000;
 }
 body {
   margin: 0;
-  background: #020617;
+  background: #000000;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 .grid-cols-8 > div:nth-child(1) {

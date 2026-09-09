@@ -38,7 +38,7 @@ describe('StockChart', () => {
     render(<StockChart symbol={stock.symbol} data={generateHistory(stock, 260)} />);
 
     await user.click(screen.getByRole('button', { name: '1M' }));
-    expect(screen.getByRole('button', { name: '1M' })).toHaveClass('bg-cyan-600');
+    expect(screen.getByRole('button', { name: '1M' })).toHaveClass('bg-emerald-600');
 
     await user.click(screen.getByLabelText(/RSI 14/));
     expect(screen.queryByText(/RSI \(14\) Indicator/)).not.toBeInTheDocument();

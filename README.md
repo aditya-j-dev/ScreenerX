@@ -1,6 +1,6 @@
-# PulseScreener
+# ScreenerX
 
-PulseScreener is a real-time Indian-equity stock screener built with Next.js, React, and TypeScript. It combines a 5,000-stock simulated universe, virtualized filtering and sorting, live WebSocket price ticks, and an interactive technical-analysis chart.
+ScreenerX is a real-time Indian-equity stock screener built with Next.js, React, and TypeScript. It combines a 5,000-stock simulated universe, virtualized filtering and sorting, live WebSocket price ticks, and an interactive technical-analysis chart.
 
 > This project uses simulated market data for engineering demonstration only. It is not financial advice.
 

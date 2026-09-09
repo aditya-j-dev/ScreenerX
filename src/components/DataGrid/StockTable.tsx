@@ -149,7 +149,7 @@ const StaticStockCell = memo(
     );
     if (field === 'symbol') {
       return (
-        <div className="flex items-center gap-1.5 font-semibold text-cyan-300">
+        <div className="flex items-center gap-1.5 font-semibold text-emerald-300">
           <button
             type="button"
             onClick={(event) => {
@@ -173,7 +173,7 @@ const StaticStockCell = memo(
           ? 'text-emerald-400'
           : direction === 'down'
             ? 'text-red-400'
-            : 'text-slate-400';
+            : 'text-neutral-400';
       const marker = direction === 'up' ? '▲' : direction === 'down' ? '▼' : '—';
       return (
         <span className={`font-mono ${colour}`}>
@@ -446,11 +446,11 @@ export const StockTable = forwardRef<
             : undefined
         }
         tabIndex={0}
-        className="h-[560px] overflow-auto rounded-xl border border-slate-800 bg-slate-950 shadow-inner focus:outline-none focus:ring-2 focus:ring-cyan-400/70"
+        className="h-[560px] overflow-auto rounded-xl border border-neutral-800 bg-black shadow-inner focus:outline-none focus:ring-2 focus:ring-emerald-400/70"
       >
         <div
           role="row"
-          className="sticky top-0 z-20 h-9 border-b border-slate-800 bg-slate-900/95 text-xs font-semibold text-slate-400 backdrop-blur"
+          className="sticky top-0 z-20 h-9 border-b border-neutral-800 bg-neutral-900/95 text-xs font-semibold text-neutral-400 backdrop-blur"
           style={{ width: table.getTotalSize(), position: 'sticky' }}
         >
           {table
@@ -477,7 +477,7 @@ export const StockTable = forwardRef<
                       y: event.clientY,
                     });
                   }}
-                  className={`absolute top-0 flex h-9 min-w-0 items-center border-r border-slate-800 ${isPinned ? 'z-30 bg-slate-900 border-r-cyan-400/30 shadow-[3px_0_6px_rgba(2,6,23,0.65)]' : ''}`}
+                  className={`absolute top-0 flex h-9 min-w-0 items-center border-r border-neutral-800 ${isPinned ? 'z-30 bg-neutral-900 border-r-emerald-400/30 shadow-[3px_0_6px_rgba(2,6,23,0.65)]' : ''}`}
                   style={{
                     left: header.column.getStart('left'),
                     width: header.getSize(),
@@ -491,7 +491,7 @@ export const StockTable = forwardRef<
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
                     {sort.field === header.column.id && (
-                      <span className="ml-1 text-cyan-400">
+                      <span className="ml-1 text-emerald-400">
                         {sort.direction === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
@@ -518,7 +518,7 @@ export const StockTable = forwardRef<
                         ),
                       }));
                     }}
-                    className="h-full w-2 cursor-col-resize touch-none hover:bg-cyan-400/60 focus:bg-cyan-400/60 focus:outline-none"
+                    className="h-full w-2 cursor-col-resize touch-none hover:bg-emerald-400/60 focus:bg-emerald-400/60 focus:outline-none"
                     title="Drag to resize column; use Left and Right Arrow keys to resize"
                   />
                 </div>
@@ -549,7 +549,7 @@ export const StockTable = forwardRef<
                     y: event.clientY,
                   });
                 }}
-                className="absolute top-0 flex h-9 min-w-0 items-center border-r border-slate-800 bg-slate-900/95"
+                className="absolute top-0 flex h-9 min-w-0 items-center border-r border-neutral-800 bg-neutral-900/95"
                 style={{ left: pinnedWidth + virtualColumn.start, width: virtualColumn.size }}
               >
                 <button
@@ -559,7 +559,7 @@ export const StockTable = forwardRef<
                 >
                   {flexRender(header.column.columnDef.header, header.getContext())}
                   {sort.field === header.column.id && (
-                    <span className="ml-1 text-cyan-400">
+                    <span className="ml-1 text-emerald-400">
                       {sort.direction === 'asc' ? '↑' : '↓'}
                     </span>
                   )}
@@ -586,7 +586,7 @@ export const StockTable = forwardRef<
                       ),
                     }));
                   }}
-                  className="h-full w-2 cursor-col-resize touch-none hover:bg-cyan-400/60 focus:bg-cyan-400/60 focus:outline-none"
+                  className="h-full w-2 cursor-col-resize touch-none hover:bg-emerald-400/60 focus:bg-emerald-400/60 focus:outline-none"
                   title="Drag to resize column; use Left and Right Arrow keys to resize"
                 />
               </div>
@@ -606,10 +606,10 @@ export const StockTable = forwardRef<
             const isSelected =
               selected === row.original.symbol || selectedIndex === virtualRow.index;
             const rowBackground = isSelected
-              ? 'bg-cyan-950'
+              ? 'bg-emerald-950'
               : virtualRow.index % 2
-                ? 'bg-slate-900'
-                : 'bg-slate-950';
+                ? 'bg-neutral-900'
+                : 'bg-black';
             const cellsByColumnId = new Map(
               row.getVisibleCells().map((cell) => [cell.column.id, cell]),
             );
@@ -632,7 +632,7 @@ export const StockTable = forwardRef<
                     event.stopPropagation();
                     selectRow(virtualRow.index, cellIndex);
                   }}
-                  className={`absolute top-0 h-9 min-w-0 overflow-hidden border-r border-slate-900/70 px-3 py-2 text-xs ${isActiveCell ? 'bg-slate-400/[0.03] ring-1 ring-inset ring-slate-500/45' : ''} ${isPinned ? `z-10 ${rowBackground} border-r-cyan-400/30 shadow-[3px_0_6px_rgba(2,6,23,0.65)]` : ''}`}
+                  className={`absolute top-0 h-9 min-w-0 overflow-hidden border-r border-neutral-900/70 px-3 py-2 text-xs ${isActiveCell ? 'bg-neutral-400/[0.03] ring-1 ring-inset ring-neutral-500/45' : ''} ${isPinned ? `z-10 ${rowBackground} border-r-emerald-400/30 shadow-[3px_0_6px_rgba(2,6,23,0.65)]` : ''}`}
                   style={{
                     left,
                     width,
@@ -651,7 +651,7 @@ export const StockTable = forwardRef<
                 aria-rowindex={virtualRow.index + 2}
                 aria-selected={isSelected}
                 onClick={() => selectRow(virtualRow.index)}
-                className={`absolute left-0 h-9 [will-change:transform] border-b border-slate-900/80 text-sm cursor-pointer hover:bg-slate-700/50 ${rowBackground} ${isSelected ? 'border-l-2 border-l-cyan-400' : ''}`}
+                className={`absolute left-0 h-9 [will-change:transform] border-b border-neutral-900/80 text-sm cursor-pointer hover:bg-neutral-700/50 ${rowBackground} ${isSelected ? 'border-l-2 border-l-emerald-400' : ''}`}
                 style={{
                   width: table.getTotalSize(),
                   transform: `translateY(${virtualRow.start}px)`,
@@ -685,7 +685,7 @@ export const StockTable = forwardRef<
             );
           })}
         </div>
-        <div className="sticky bottom-0 z-20 flex items-center justify-between border-t border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-400">
+        <div className="sticky bottom-0 z-20 flex items-center justify-between border-t border-neutral-800 bg-neutral-900 px-3 py-2 text-xs text-neutral-400">
           <span>
             Showing <strong className="text-white">{stocks.length.toLocaleString()}</strong>{' '}
             filtered stocks
@@ -696,17 +696,19 @@ export const StockTable = forwardRef<
       {columnContextMenu && (
         <div
           role="menu"
-          className="fixed z-50 min-w-40 rounded-lg border border-slate-700 bg-slate-900 p-1 shadow-xl"
+          className="fixed z-50 min-w-40 rounded-lg border border-neutral-700 bg-neutral-900 p-1 shadow-xl"
           style={{ left: columnContextMenu.x, top: columnContextMenu.y }}
         >
           {columnContextMenu.columnId === 'symbol' ? (
-            <span className="block px-3 py-2 text-xs text-slate-400">Symbol is always pinned</span>
+            <span className="block px-3 py-2 text-xs text-neutral-400">
+              Symbol is always pinned
+            </span>
           ) : (
             <button
               type="button"
               role="menuitem"
               onClick={() => toggleColumnPin(columnContextMenu.columnId)}
-              className="w-full rounded px-3 py-2 text-left text-sm hover:bg-slate-800"
+              className="w-full rounded px-3 py-2 text-left text-sm hover:bg-neutral-800"
             >
               {table.getColumn(columnContextMenu.columnId)?.getIsPinned() === 'left'
                 ? 'Unpin column'
@@ -721,9 +723,9 @@ export const StockTable = forwardRef<
             role="dialog"
             aria-modal="true"
             aria-label="Keyboard shortcuts"
-            className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6"
+            className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
           >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
               <h3 className="font-bold">Keyboard Shortcuts</h3>
               <button
                 type="button"
@@ -733,7 +735,7 @@ export const StockTable = forwardRef<
                 ✕
               </button>
             </div>
-            <dl className="mt-4 space-y-3 text-sm text-slate-300">
+            <dl className="mt-4 space-y-3 text-sm text-neutral-300">
               <div className="flex justify-between">
                 <dt>Move active cell</dt>
                 <dd>↑ ↓ ← →</dd>

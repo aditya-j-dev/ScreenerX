@@ -14,15 +14,17 @@ export default function StockDetailPage({ params }: StockDetailPageProps) {
   const symbol = params.symbol.toUpperCase();
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-slate-100">
-      <section className="max-w-md rounded-xl border border-slate-800 bg-slate-900 p-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">Stock detail</p>
+    <main className="flex min-h-screen items-center justify-center bg-black p-6 text-neutral-100">
+      <section className="max-w-md rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-400">
+          Stock detail
+        </p>
         <h1 className="mt-2 text-2xl font-bold">{symbol}</h1>
-        <p className="mt-3 text-sm text-slate-400">
+        <p className="mt-3 text-sm text-neutral-400">
           The interactive stock-detail chart will be connected in Day 10.
         </p>
         <Link
-          className="mt-5 inline-block text-sm font-medium text-cyan-300 hover:text-cyan-200"
+          className="mt-5 inline-block text-sm font-medium text-emerald-300 hover:text-emerald-200"
           href="/screener"
         >
           Return to screener

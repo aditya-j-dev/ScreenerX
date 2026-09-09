@@ -7,12 +7,12 @@ export default {
     extend: {
       colors: {
         brand: {
-          50: '#E8F4FD',
-          100: '#C5E3FA',
-          500: '#2563EB',
-          600: '#1D4ED8',
-          700: '#1E40AF',
-          900: '#1E3A5F',
+          50: '#ECFDF5',
+          100: '#D1FAE5',
+          500: '#22C55E',
+          600: '#16A34A',
+          700: '#15803D',
+          900: '#14532D',
         },
         positive: { DEFAULT: '#22C55E', light: '#DCFCE7' },
         negative: { DEFAULT: '#EF4444', light: '#FEE2E2' },

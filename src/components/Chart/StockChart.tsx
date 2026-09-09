@@ -40,11 +40,11 @@ function NumberSetting({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="flex items-center justify-between gap-2 text-slate-400">
+    <label className="flex items-center justify-between gap-2 text-neutral-400">
       <span>{label}</span>
       <input
         aria-label={label}
-        className="w-16 rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-right text-slate-100 outline-none focus:border-cyan-400"
+        className="w-16 rounded border border-neutral-700 bg-neutral-900 px-1.5 py-1 text-right text-neutral-100 outline-none focus:border-emerald-400"
         type="number"
         min={min}
         max={max}
@@ -121,10 +121,10 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
     // Main Candlestick Chart Initialization
     const chart = createChart(priceRef.current, {
       height: 320,
-      layout: { textColor: '#cbd5e1', background: { color: '#020617' } },
-      grid: { vertLines: { color: '#172033' }, horzLines: { color: '#172033' } },
-      rightPriceScale: { borderColor: '#243047' },
-      timeScale: { borderColor: '#243047' },
+      layout: { textColor: '#d4d4d4', background: { color: '#000000' } },
+      grid: { vertLines: { color: '#173020' }, horzLines: { color: '#173020' } },
+      rightPriceScale: { borderColor: '#254c31' },
+      timeScale: { borderColor: '#254c31' },
       handleScroll: {
         mouseWheel: true,
         pressedMouseMove: true,
@@ -151,7 +151,7 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
 
     // Render all required simple-moving-average overlays.
     if (showSMA) {
-      const smaColors = ['#38bdf8', '#22c55e', '#f97316'];
+      const smaColors = ['#34d399', '#22c55e', '#f97316'];
       smaPeriods.forEach((period, seriesIndex) => {
         const series = chart.addLineSeries({
           color: smaColors[seriesIndex] ?? '#e2e8f0',
@@ -233,9 +233,9 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
     // RSI Sub-chart
     const rsiChart = createChart(rsiRef.current, {
       height: 120,
-      layout: { textColor: '#94a3b8', background: { color: '#020617' } },
-      grid: { vertLines: { color: '#172033' }, horzLines: { color: '#172033' } },
-      rightPriceScale: { borderColor: '#243047' },
+      layout: { textColor: '#a3a3a3', background: { color: '#000000' } },
+      grid: { vertLines: { color: '#173020' }, horzLines: { color: '#173020' } },
+      rightPriceScale: { borderColor: '#254c31' },
       timeScale: { visible: false },
     });
 
@@ -412,7 +412,7 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
       annotation.tool === 'horizontal'
         ? '#fbbf24'
         : annotation.tool === 'trend'
-          ? '#38bdf8'
+          ? '#22c55e'
           : '#a78bfa';
     if (annotation.tool === 'rectangle') {
       return (
@@ -445,9 +445,9 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
   return (
     <div className="space-y-3">
       {/* Timeframe & Controls Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 pb-2 text-xs">
         {/* Timeframe Buttons */}
-        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+        <div className="flex items-center gap-1 bg-black p-1 rounded-lg border border-neutral-800">
           {(['1D', '1W', '1M', '3M', '1Y', '5Y'] as Timeframe[]).map((tf) => (
             <button
               key={tf}
@@ -455,8 +455,8 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
               onClick={() => setTimeframe(tf)}
               className={`rounded px-2.5 py-1 text-xs font-semibold transition-all ${
                 timeframe === tf
-                  ? 'bg-cyan-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
               }`}
             >
               {tf}
@@ -468,7 +468,7 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
         <button
           type="button"
           onClick={downloadChartAsImage}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1 text-xs font-medium text-slate-200 hover:bg-slate-700 hover:text-white transition-colors"
+          className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1 text-xs font-medium text-neutral-200 hover:bg-neutral-700 hover:text-white transition-colors"
         >
           <span>📷</span> Export PNG
         </button>
@@ -476,23 +476,23 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
           type="button"
           onClick={() => setShowSettings((visible) => !visible)}
           aria-expanded={showSettings}
-          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700 hover:text-white"
+          className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1 text-xs font-medium text-neutral-200 transition-colors hover:bg-neutral-700 hover:text-white"
         >
           Settings
         </button>
       </div>
 
       {/* Indicator Toggles */}
-      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300 bg-slate-950/60 p-2 rounded-lg border border-slate-800/80">
-        <span className="font-semibold text-slate-400">Indicators:</span>
+      <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-300 bg-black/60 p-2 rounded-lg border border-neutral-800/80">
+        <span className="font-semibold text-neutral-400">Indicators:</span>
         <label className="flex items-center gap-1.5 cursor-pointer select-none">
           <input
             type="checkbox"
             checked={showSMA}
             onChange={(e) => setShowSMA(e.target.checked)}
-            className="rounded text-cyan-500"
+            className="rounded text-emerald-500"
           />
-          <span className="text-cyan-400">SMA {smaPeriods.join(' / ')}</span>
+          <span className="text-emerald-400">SMA {smaPeriods.join(' / ')}</span>
         </label>
         <label className="flex items-center gap-1.5 cursor-pointer select-none">
           <input
@@ -526,16 +526,16 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
             type="checkbox"
             checked={showVolumeProfile}
             onChange={(e) => setShowVolumeProfile(e.target.checked)}
-            className="rounded text-slate-400"
+            className="rounded text-neutral-400"
           />
-          <span className="text-slate-300">Volume Profile</span>
+          <span className="text-neutral-300">Volume Profile</span>
         </label>
       </div>
 
       {showSettings && (
-        <div className="grid gap-3 rounded-lg border border-slate-700 bg-slate-950 p-3 text-xs sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 rounded-lg border border-neutral-700 bg-black p-3 text-xs sm:grid-cols-2 xl:grid-cols-3">
           <div className="space-y-2">
-            <p className="font-semibold text-cyan-400">SMA periods</p>
+            <p className="font-semibold text-emerald-400">SMA periods</p>
             {smaPeriods.map((period, index) => (
               <NumberSetting
                 key={`sma-${index}`}
@@ -591,8 +591,8 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 p-2 text-xs">
-        <span className="font-semibold text-slate-400">Draw:</span>
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-800 bg-black/60 p-2 text-xs">
+        <span className="font-semibold text-neutral-400">Draw:</span>
         {(
           [
             ['horizontal', 'Horizontal line'],
@@ -605,7 +605,7 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
             type="button"
             aria-pressed={drawingTool === tool}
             onClick={() => setDrawingTool((current) => (current === tool ? 'none' : tool))}
-            className={`rounded border px-2 py-1 transition-colors ${drawingTool === tool ? 'border-cyan-400 bg-cyan-400/15 text-cyan-300' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
+            className={`rounded border px-2 py-1 transition-colors ${drawingTool === tool ? 'border-emerald-400 bg-emerald-400/15 text-emerald-300' : 'border-neutral-700 text-neutral-300 hover:border-neutral-500'}`}
           >
             {label}
           </button>
@@ -614,7 +614,7 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
           type="button"
           onClick={() => setAnnotations([])}
           disabled={annotations.length === 0}
-          className="ml-auto rounded px-2 py-1 text-slate-400 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+          className="ml-auto rounded px-2 py-1 text-neutral-400 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Clear drawings
         </button>
@@ -623,20 +623,22 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
       {/* Main Chart and cursor-driven OHLCV tooltip */}
       <div
         ref={priceWrapperRef}
-        className="relative w-full overflow-hidden rounded-xl border border-slate-800"
+        className="relative w-full overflow-hidden rounded-xl border border-neutral-800"
       >
         <div ref={priceRef} className="w-full" />
         {showVolumeProfile && (
-          <div className="pointer-events-none absolute inset-y-2 right-2 z-10 flex w-24 flex-col justify-between border-l border-slate-700/70 bg-slate-950/65 px-1.5 py-1">
-            <span className="text-center text-[9px] font-semibold text-slate-400">VOL PROFILE</span>
+          <div className="pointer-events-none absolute inset-y-2 right-2 z-10 flex w-24 flex-col justify-between border-l border-neutral-700/70 bg-black/65 px-1.5 py-1">
+            <span className="text-center text-[9px] font-semibold text-neutral-400">
+              VOL PROFILE
+            </span>
             <div className="flex flex-1 flex-col justify-between py-1">
               {profile.map((point) => (
                 <div key={point.price} className="flex items-center justify-end gap-1">
-                  <span className="w-8 text-right font-mono text-[8px] text-slate-400">
+                  <span className="w-8 text-right font-mono text-[8px] text-neutral-400">
                     {point.price.toFixed(0)}
                   </span>
                   <span
-                    className="h-1.5 rounded-l bg-cyan-400/60"
+                    className="h-1.5 rounded-l bg-emerald-400/60"
                     style={{ width: `${Math.max(3, (point.volume / maxVol) * 58)}px` }}
                   />
                 </div>
@@ -662,7 +664,7 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
         </div>
         <div
           ref={tooltipRef}
-          className="pointer-events-none absolute z-20 rounded bg-slate-950/95 px-2 py-1 font-mono text-[10px] text-slate-100 opacity-0 shadow-lg transition-opacity"
+          className="pointer-events-none absolute z-20 rounded bg-black/95 px-2 py-1 font-mono text-[10px] text-neutral-100 opacity-0 shadow-lg transition-opacity"
         />
       </div>
 
@@ -671,9 +673,12 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
         <div>
           <div className="mb-1 text-[11px] font-semibold text-rose-400 flex items-center justify-between">
             <span>RSI ({rsiPeriod}) Indicator</span>
-            <span className="text-slate-400 text-[10px]">Overbought 70 · Oversold 30</span>
+            <span className="text-neutral-400 text-[10px]">Overbought 70 · Oversold 30</span>
           </div>
-          <div ref={rsiRef} className="w-full rounded-xl overflow-hidden border border-slate-800" />
+          <div
+            ref={rsiRef}
+            className="w-full rounded-xl overflow-hidden border border-neutral-800"
+          />
         </div>
       )}
     </div>
