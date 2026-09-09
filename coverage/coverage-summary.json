@@ -1,0 +1,129 @@
+{
+  "total": {
+    "lines": { "total": 1456, "covered": 1172, "skipped": 0, "pct": 80.49 },
+    "statements": { "total": 1456, "covered": 1172, "skipped": 0, "pct": 80.49 },
+    "functions": { "total": 163, "covered": 118, "skipped": 0, "pct": 72.39 },
+    "branches": { "total": 577, "covered": 497, "skipped": 0, "pct": 86.13 },
+    "branchesTrue": { "total": 0, "covered": 0, "skipped": 0, "pct": 100 }
+  },
+  "D:\\ScreenerX-main\\src\\components\\ErrorBoundary.tsx": {
+    "lines": { "total": 2, "covered": 2, "skipped": 0, "pct": 100 },
+    "functions": { "total": 4, "covered": 4, "skipped": 0, "pct": 100 },
+    "statements": { "total": 2, "covered": 2, "skipped": 0, "pct": 100 },
+    "branches": { "total": 6, "covered": 6, "skipped": 0, "pct": 100 }
+  },
+  "D:\\ScreenerX-main\\src\\components\\OfflineServiceWorker.tsx": {
+    "lines": { "total": 7, "covered": 7, "skipped": 0, "pct": 100 },
+    "functions": { "total": 1, "covered": 1, "skipped": 0, "pct": 100 },
+    "statements": { "total": 7, "covered": 7, "skipped": 0, "pct": 100 },
+    "branches": { "total": 2, "covered": 2, "skipped": 0, "pct": 100 }
+  },
+  "D:\\ScreenerX-main\\src\\components\\Providers.tsx": {
+    "lines": { "total": 2, "covered": 2, "skipped": 0, "pct": 100 },
+    "functions": { "total": 1, "covered": 1, "skipped": 0, "pct": 100 },
+    "statements": { "total": 2, "covered": 2, "skipped": 0, "pct": 100 },
+    "branches": { "total": 2, "covered": 2, "skipped": 0, "pct": 100 }
+  },
+  "D:\\ScreenerX-main\\src\\components\\Screener.tsx": {
+    "lines": { "total": 155, "covered": 0, "skipped": 0, "pct": 0 },
+    "functions": { "total": 1, "covered": 0, "skipped": 0, "pct": 0 },
+    "statements": { "total": 155, "covered": 0, "skipped": 0, "pct": 0 },
+    "branches": { "total": 1, "covered": 0, "skipped": 0, "pct": 0 }
+  },
+  "D:\\ScreenerX-main\\src\\components\\Chart\\StockChart.tsx": {
+    "lines": { "total": 391, "covered": 354, "skipped": 0, "pct": 90.53 },
+    "functions": { "total": 22, "covered": 11, "skipped": 0, "pct": 50 },
+    "statements": { "total": 391, "covered": 354, "skipped": 0, "pct": 90.53 },
+    "branches": { "total": 81, "covered": 66, "skipped": 0, "pct": 81.48 }
+  },
+  "D:\\ScreenerX-main\\src\\components\\DataGrid\\StockTable.tsx": {
+    "lines": { "total": 258, "covered": 196, "skipped": 0, "pct": 75.96 },
+    "functions": { "total": 27, "covered": 13, "skipped": 0, "pct": 48.14 },
+    "statements": { "total": 258, "covered": 196, "skipped": 0, "pct": 75.96 },
+    "branches": { "total": 118, "covered": 86, "skipped": 0, "pct": 72.88 }
+  },
+  "D:\\ScreenerX-main\\src\\components\\FilterPanel\\FilterPanel.tsx": {
+    "lines": { "total": 42, "covered": 42, "skipped": 0, "pct": 100 },
+    "functions": { "total": 35, "covered": 17, "skipped": 0, "pct": 48.57 },
+    "statements": { "total": 42, "covered": 42, "skipped": 0, "pct": 100 },
+    "branches": { "total": 81, "covered": 71, "skipped": 0, "pct": 87.65 }
+  },
+  "D:\\ScreenerX-main\\src\\hooks\\useNetworkStatus.ts": {
+    "lines": { "total": 15, "covered": 15, "skipped": 0, "pct": 100 },
+    "functions": { "total": 3, "covered": 3, "skipped": 0, "pct": 100 },
+    "statements": { "total": 15, "covered": 15, "skipped": 0, "pct": 100 },
+    "branches": { "total": 6, "covered": 6, "skipped": 0, "pct": 100 }
+  },
+  "D:\\ScreenerX-main\\src\\hooks\\useStockData.ts": {
+    "lines": { "total": 26, "covered": 0, "skipped": 0, "pct": 0 },
+    "functions": { "total": 1, "covered": 0, "skipped": 0, "pct": 0 },
+    "statements": { "total": 26, "covered": 0, "skipped": 0, "pct": 0 },
+    "branches": { "total": 1, "covered": 0, "skipped": 0, "pct": 0 }
+  },
+  "D:\\ScreenerX-main\\src\\hooks\\useWebSocket.ts": {
+    "lines": { "total": 35, "covered": 35, "skipped": 0, "pct": 100 },
+    "functions": { "total": 7, "covered": 7, "skipped": 0, "pct": 100 },
+    "statements": { "total": 35, "covered": 35, "skipped": 0, "pct": 100 },
+    "branches": { "total": 24, "covered": 21, "skipped": 0, "pct": 87.5 }
+  },
+  "D:\\ScreenerX-main\\src\\lib\\filterEngine.ts": {
+    "lines": { "total": 134, "covered": 132, "skipped": 0, "pct": 98.5 },
+    "functions": { "total": 15, "covered": 15, "skipped": 0, "pct": 100 },
+    "statements": { "total": 134, "covered": 132, "skipped": 0, "pct": 98.5 },
+    "branches": { "total": 73, "covered": 66, "skipped": 0, "pct": 90.41 }
+  },
+  "D:\\ScreenerX-main\\src\\lib\\formatters.ts": {
+    "lines": { "total": 22, "covered": 22, "skipped": 0, "pct": 100 },
+    "functions": { "total": 5, "covered": 5, "skipped": 0, "pct": 100 },
+    "statements": { "total": 22, "covered": 22, "skipped": 0, "pct": 100 },
+    "branches": { "total": 17, "covered": 17, "skipped": 0, "pct": 100 }
+  },
+  "D:\\ScreenerX-main\\src\\lib\\gridKeyboard.ts": {
+    "lines": { "total": 29, "covered": 29, "skipped": 0, "pct": 100 },
+    "functions": { "total": 4, "covered": 4, "skipped": 0, "pct": 100 },
+    "statements": { "total": 29, "covered": 29, "skipped": 0, "pct": 100 },
+    "branches": { "total": 13, "covered": 11, "skipped": 0, "pct": 84.61 }
+  },
+  "D:\\ScreenerX-main\\src\\lib\\indicators.ts": {
+    "lines": { "total": 38, "covered": 38, "skipped": 0, "pct": 100 },
+    "functions": { "total": 5, "covered": 5, "skipped": 0, "pct": 100 },
+    "statements": { "total": 38, "covered": 38, "skipped": 0, "pct": 100 },
+    "branches": { "total": 36, "covered": 34, "skipped": 0, "pct": 94.44 }
+  },
+  "D:\\ScreenerX-main\\src\\lib\\mockData.ts": {
+    "lines": { "total": 178, "covered": 176, "skipped": 0, "pct": 98.87 },
+    "functions": { "total": 9, "covered": 9, "skipped": 0, "pct": 100 },
+    "statements": { "total": 178, "covered": 176, "skipped": 0, "pct": 98.87 },
+    "branches": { "total": 63, "covered": 60, "skipped": 0, "pct": 95.23 }
+  },
+  "D:\\ScreenerX-main\\src\\lib\\presets.ts": {
+    "lines": { "total": 6, "covered": 6, "skipped": 0, "pct": 100 },
+    "functions": { "total": 0, "covered": 0, "skipped": 0, "pct": 100 },
+    "statements": { "total": 6, "covered": 6, "skipped": 0, "pct": 100 },
+    "branches": { "total": 0, "covered": 0, "skipped": 0, "pct": 100 }
+  },
+  "D:\\ScreenerX-main\\src\\lib\\priceSimulator.ts": {
+    "lines": { "total": 32, "covered": 32, "skipped": 0, "pct": 100 },
+    "functions": { "total": 4, "covered": 4, "skipped": 0, "pct": 100 },
+    "statements": { "total": 32, "covered": 32, "skipped": 0, "pct": 100 },
+    "branches": { "total": 14, "covered": 11, "skipped": 0, "pct": 78.57 }
+  },
+  "D:\\ScreenerX-main\\src\\lib\\stockCache.ts": {
+    "lines": { "total": 20, "covered": 20, "skipped": 0, "pct": 100 },
+    "functions": { "total": 4, "covered": 4, "skipped": 0, "pct": 100 },
+    "statements": { "total": 20, "covered": 20, "skipped": 0, "pct": 100 },
+    "branches": { "total": 5, "covered": 5, "skipped": 0, "pct": 100 }
+  },
+  "D:\\ScreenerX-main\\src\\lib\\virtualGrid.ts": {
+    "lines": { "total": 6, "covered": 6, "skipped": 0, "pct": 100 },
+    "functions": { "total": 1, "covered": 1, "skipped": 0, "pct": 100 },
+    "statements": { "total": 6, "covered": 6, "skipped": 0, "pct": 100 },
+    "branches": { "total": 3, "covered": 3, "skipped": 0, "pct": 100 }
+  },
+  "D:\\ScreenerX-main\\src\\stores\\stockStore.ts": {
+    "lines": { "total": 58, "covered": 58, "skipped": 0, "pct": 100 },
+    "functions": { "total": 14, "covered": 14, "skipped": 0, "pct": 100 },
+    "statements": { "total": 58, "covered": 58, "skipped": 0, "pct": 100 },
+    "branches": { "total": 31, "covered": 30, "skipped": 0, "pct": 96.77 }
+  }
+}
