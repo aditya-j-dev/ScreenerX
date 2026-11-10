@@ -1,0 +1,136 @@
+{
+  "recordedAt": "2026-11-09T13:48:00.369Z",
+  "note": "File gzip estimates, not network transfer or route download totals. Includes lazy and other-route assets.",
+  "emittedJsFiles": 20,
+  "totalEmittedJsBytes": 1054924,
+  "totalEmittedGzipBytes": 326194,
+  "assets": [
+    {
+      "path": ".next/static/chunks/fd9d1056-1936ceef6a5d1f37.js",
+      "bytes": 172831,
+      "gzipBytes": 53742
+    },
+    {
+      "path": ".next/static/chunks/391.59fb778774c4bb9d.js",
+      "bytes": 159240,
+      "gzipBytes": 50234
+    },
+    {
+      "path": ".next/static/chunks/framework-f66176bb897dc684.js",
+      "bytes": 139978,
+      "gzipBytes": 44946
+    },
+    {
+      "path": ".next/static/chunks/polyfills-42372ed130431b0a.js",
+      "bytes": 112594,
+      "gzipBytes": 39627
+    },
+    {
+      "path": ".next/static/chunks/main-c4fc0b2fa33eeaad.js",
+      "bytes": 110994,
+      "gzipBytes": 32275
+    },
+    {
+      "path": ".next/static/chunks/117-1f645dd1e2db7a67.js",
+      "bytes": 123527,
+      "gzipBytes": 31701
+    },
+    {
+      "path": ".next/static/chunks/589-4790b3ce481cb5b2.js",
+      "bytes": 108882,
+      "gzipBytes": 31648
+    },
+    {
+      "path": ".next/static/chunks/595-4807bb287f862136.js",
+      "bytes": 49132,
+      "gzipBytes": 14822
+    },
+    {
+      "path": ".next/static/chunks/534.2c8ea3e70ab7ca18.js",
+      "bytes": 22797,
+      "gzipBytes": 7715
+    },
+    {
+      "path": ".next/static/chunks/972-bf6a2cbe671bf273.js",
+      "bytes": 20578,
+      "gzipBytes": 6806
+    },
+    {
+      "path": ".next/static/chunks/919-fb159e6a0bf0d575.js",
+      "bytes": 16650,
+      "gzipBytes": 5616
+    },
+    {
+      "path": ".next/static/chunks/app/layout-2d86bad5b5de15a9.js",
+      "bytes": 10661,
+      "gzipBytes": 3339
+    },
+    {
+      "path": ".next/static/chunks/webpack-a2e84321dff7d402.js",
+      "bytes": 3805,
+      "gzipBytes": 1800
+    },
+    {
+      "path": ".next/static/chunks/app/_not-found/page-39634686c4f86669.js",
+      "bytes": 1745,
+      "gzipBytes": 873
+    },
+    {
+      "path": ".next/static/chunks/main-app-e92940465fa44225.js",
+      "bytes": 461,
+      "gzipBytes": 218
+    },
+    {
+      "path": ".next/static/chunks/pages/_app-72b849fbd24ac258.js",
+      "bytes": 280,
+      "gzipBytes": 194
+    },
+    {
+      "path": ".next/static/chunks/pages/_error-7ba65e1336b92748.js",
+      "bytes": 247,
+      "gzipBytes": 181
+    },
+    {
+      "path": ".next/static/chunks/app/[symbol]/page-ab5270fde46dc6e1.js",
+      "bytes": 212,
+      "gzipBytes": 175
+    },
+    {
+      "path": ".next/static/chunks/app/page-42c0ac4f26843864.js",
+      "bytes": 155,
+      "gzipBytes": 141
+    },
+    {
+      "path": ".next/static/chunks/app/screener/page-106ee26b16ba2914.js",
+      "bytes": 155,
+      "gzipBytes": 141
+    }
+  ],
+  "stockApi": {
+    "status": 200,
+    "records": 5000,
+    "decodedBytes": 4216989,
+    "gzipBytes": 685580,
+    "generatedAt": "2026-11-09T13:43:58.241Z",
+    "prerenderRoute": {
+      "initialHeaders": {
+        "content-type": "application/json",
+        "x-next-cache-tags": "_N_T_/layout,_N_T_/api/layout,_N_T_/api/stocks/layout,_N_T_/api/stocks/route,_N_T_/api/stocks"
+      },
+      "experimentalBypassFor": [
+        {
+          "type": "header",
+          "key": "Next-Action"
+        },
+        {
+          "type": "header",
+          "key": "content-type",
+          "value": "multipart/form-data;.*"
+        }
+      ],
+      "initialRevalidateSeconds": false,
+      "srcRoute": "/api/stocks",
+      "dataRoute": null
+    }
+  }
+}

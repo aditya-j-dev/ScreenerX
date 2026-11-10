@@ -1,0 +1,205 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "ScreenerX Runtime Architecture",
+    "subtitle": "Verified modules at the pinned repository revision; market data is simulated locally.",
+    "output": "docs/diagrams/architecture.html",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/aditya-j-dev/ScreenerX.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "e685d9beeaad31c8bd681d30449935c616f3d188"
+    }
+  },
+  "components": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "User browser",
+      "sublabel": "renders and interacts with ScreenerX",
+      "pos": [30, 280],
+      "size": [150, 64],
+      "sources": [{ "path": "src/app/layout.tsx", "line": 8, "end_line": 15 }]
+    },
+    {
+      "id": "next-ui",
+      "type": "frontend",
+      "label": "Next.js routes + Screener UI",
+      "sublabel": "App Router, filters, virtualized table, chart",
+      "pos": [355, 280],
+      "size": [185, 68],
+      "sources": [
+        { "path": "src/app/page.tsx", "line": 1, "end_line": 5 },
+        { "path": "src/components/Screener.tsx", "line": 31, "end_line": 33 }
+      ]
+    },
+    {
+      "id": "query",
+      "type": "frontend",
+      "label": "React Query data hook",
+      "sublabel": "fetches and caches stock universe",
+      "pos": [650, 130],
+      "size": [165, 64],
+      "sources": [
+        { "path": "src/hooks/useStockData.ts", "line": 7, "end_line": 33 },
+        { "path": "src/components/Providers.tsx", "line": 5, "end_line": 14 }
+      ]
+    },
+    {
+      "id": "stocks-api",
+      "type": "backend",
+      "label": "GET /api/stocks",
+      "sublabel": "Next.js route; 5-minute in-process cache",
+      "pos": [940, 130],
+      "size": [175, 64],
+      "sources": [{ "path": "src/app/api/stocks/route.ts", "line": 4, "end_line": 19 }]
+    },
+    {
+      "id": "mock-data",
+      "type": "backend",
+      "label": "Mock-data generator",
+      "sublabel": "deterministic 5,000-stock universe and OHLCV",
+      "pos": [1290, 130],
+      "size": [175, 64],
+      "sources": [{ "path": "src/lib/mockData.ts", "line": 208, "end_line": 327 }]
+    },
+    {
+      "id": "websocket",
+      "type": "backend",
+      "label": "WebSocket simulator",
+      "sublabel": "separate local ws server on port 3001",
+      "pos": [940, 395],
+      "size": [175, 64],
+      "sources": [
+        { "path": "server/ws-server.ts", "line": 10, "end_line": 13 },
+        { "path": "server/ws-server.ts", "line": 33, "end_line": 90 }
+      ]
+    },
+    {
+      "id": "zustand",
+      "type": "frontend",
+      "label": "Zustand shared store",
+      "sublabel": "filters, selection, watchlist, live prices",
+      "pos": [610, 395],
+      "size": [165, 64],
+      "sources": [
+        { "path": "src/stores/stockStore.ts", "line": 14, "end_line": 31 },
+        { "path": "src/hooks/useWebSocket.ts", "line": 15, "end_line": 23 }
+      ]
+    },
+    {
+      "id": "indexeddb",
+      "type": "database",
+      "label": "Browser IndexedDB",
+      "sublabel": "cached stock universe for offline fallback",
+      "pos": [610, 585],
+      "size": [165, 64],
+      "sources": [{ "path": "src/lib/stockCache.ts", "line": 4, "end_line": 26 }]
+    },
+    {
+      "id": "service-worker",
+      "type": "frontend",
+      "label": "Service worker",
+      "sublabel": "production app-shell and static-asset cache",
+      "pos": [355, 585],
+      "size": [185, 64],
+      "sources": [
+        { "path": "src/components/OfflineServiceWorker.tsx", "line": 5, "end_line": 21 },
+        { "path": "public/sw.js", "line": 1, "end_line": 53 }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "visit",
+      "from": "browser",
+      "to": "next-ui",
+      "label": "loads UI and interactions",
+      "variant": "emphasis"
+    },
+    {
+      "id": "query-use",
+      "from": "next-ui",
+      "to": "query",
+      "label": "useStockData",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "api-fetch",
+      "from": "query",
+      "to": "stocks-api",
+      "label": "fetch /api/stocks",
+      "variant": "emphasis"
+    },
+    {
+      "id": "generate-universe",
+      "from": "stocks-api",
+      "to": "mock-data",
+      "label": "generate mock stocks"
+    },
+    {
+      "id": "persist-universe",
+      "from": "query",
+      "to": "indexeddb",
+      "label": "save online response; read on failure",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "ui-store",
+      "from": "next-ui",
+      "to": "zustand",
+      "label": "filters, selection, watchlist",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "stream-ticks",
+      "from": "websocket",
+      "to": "zustand",
+      "label": "batched price ticks",
+      "variant": "emphasis"
+    },
+    {
+      "id": "store-read",
+      "from": "zustand",
+      "to": "next-ui",
+      "label": "live prices and UI state",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "bottom"
+    },
+    {
+      "id": "register-worker",
+      "from": "next-ui",
+      "to": "service-worker",
+      "label": "registers in production",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Runtime boundary",
+      "items": [
+        "The Next.js UI and browser stores run in the browser.",
+        "The API route and WebSocket simulator generate simulated data; no market-data vendor is configured."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Persistence",
+      "items": [
+        "The API cache is process-local and expires after five minutes.",
+        "IndexedDB stores the stock universe; Zustand persists only the watchlist."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,260 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "ScreenerX Startup and Build Workflow",
+    "subtitle": "Local development is the verified runtime path; no deploy or CI configuration was found in the repository.",
+    "output": "docs/diagrams/workflow.html",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/aditya-j-dev/ScreenerX.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "e685d9beeaad31c8bd681d30449935c616f3d188"
+    }
+  },
+  "lanes": [
+    { "id": "developer", "label": "Developer command" },
+    { "id": "next", "label": "Next.js application" },
+    { "id": "stream", "label": "WebSocket simulator" },
+    { "id": "browser", "label": "Browser runtime" }
+  ],
+  "phases": [
+    { "id": "command", "label": "Choose command", "fromCol": 0, "toCol": 0 },
+    {
+      "id": "launch",
+      "label": "Launch processes",
+      "fromCol": 1,
+      "toCol": 2,
+      "variant": "emphasis"
+    },
+    { "id": "serve", "label": "Serve and stream", "fromCol": 3, "toCol": 4, "variant": "dashed" },
+    {
+      "id": "build",
+      "label": "Production-style local path",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "default"
+    }
+  ],
+  "groups": [
+    {
+      "id": "dev-path",
+      "label": "Default development path",
+      "lane": "developer",
+      "fromCol": 0,
+      "toCol": 1,
+      "variant": "emphasis"
+    },
+    {
+      "id": "ws-loop",
+      "label": "Continuous tick loop",
+      "lane": "stream",
+      "fromCol": 2,
+      "toCol": 4,
+      "variant": "dashed"
+    },
+    {
+      "id": "prod-path",
+      "label": "Alternative local production path",
+      "lane": "developer",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "default"
+    }
+  ],
+  "mainPath": ["dev", "concurrent", "nextdev", "appboot", "browser"],
+  "nodes": [
+    {
+      "id": "dev",
+      "lane": "developer",
+      "col": 0,
+      "type": "external",
+      "label": "npm run dev",
+      "sublabel": "default local command",
+      "width": 138,
+      "sources": [
+        { "path": "package.json", "line": 5, "end_line": 10 },
+        { "path": "README.md", "line": 57, "end_line": 76 }
+      ]
+    },
+    {
+      "id": "concurrent",
+      "lane": "developer",
+      "col": 1,
+      "type": "messagebus",
+      "label": "concurrently",
+      "sublabel": "launches two processes",
+      "width": 138,
+      "sources": [{ "path": "package.json", "line": 5, "end_line": 8 }]
+    },
+    {
+      "id": "nextdev",
+      "lane": "next",
+      "col": 2,
+      "type": "backend",
+      "label": "next dev",
+      "sublabel": "development server",
+      "width": 138,
+      "sources": [{ "path": "package.json", "line": 5, "end_line": 8 }]
+    },
+    {
+      "id": "wsstart",
+      "lane": "stream",
+      "col": 2,
+      "type": "backend",
+      "label": "tsx ws-server.ts",
+      "sublabel": "starts simulator",
+      "width": 138,
+      "sources": [
+        { "path": "package.json", "line": 5, "end_line": 8 },
+        { "path": "server/ws-server.ts", "line": 10, "end_line": 33 }
+      ]
+    },
+    {
+      "id": "appboot",
+      "lane": "next",
+      "col": 3,
+      "type": "frontend",
+      "label": "App Router boot",
+      "sublabel": "layout and Providers",
+      "width": 138,
+      "sources": [
+        { "path": "src/app/layout.tsx", "line": 1, "end_line": 15 },
+        { "path": "src/components/Providers.tsx", "line": 5, "end_line": 14 }
+      ]
+    },
+    {
+      "id": "tickloop",
+      "lane": "stream",
+      "col": 3,
+      "type": "messagebus",
+      "label": "Timer loop",
+      "sublabel": "emits due price ticks",
+      "width": 138,
+      "sources": [
+        { "path": "server/ws-server.ts", "line": 41, "end_line": 80 },
+        { "path": "server/ws-server.ts", "line": 89, "end_line": 92 }
+      ]
+    },
+    {
+      "id": "browser",
+      "lane": "browser",
+      "col": 4,
+      "type": "frontend",
+      "label": "Screener runs",
+      "sublabel": "loads data and connects",
+      "width": 138,
+      "sources": [
+        { "path": "src/components/Screener.tsx", "line": 31, "end_line": 33 },
+        { "path": "src/hooks/useWebSocket.ts", "line": 53, "end_line": 74 }
+      ]
+    },
+    {
+      "id": "build",
+      "lane": "developer",
+      "col": 5,
+      "type": "external",
+      "label": "npm run build",
+      "sublabel": "optional local build",
+      "width": 138,
+      "sources": [
+        { "path": "package.json", "line": 9, "end_line": 15 },
+        { "path": "README.md", "line": 78, "end_line": 85 }
+      ]
+    },
+    {
+      "id": "start",
+      "lane": "next",
+      "col": 5,
+      "type": "backend",
+      "label": "next start",
+      "sublabel": "serves build output",
+      "width": 138,
+      "sources": [
+        { "path": "package.json", "line": 9, "end_line": 10 },
+        { "path": "README.md", "line": 78, "end_line": 85 }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "run-dev",
+      "from": "dev",
+      "to": "concurrent",
+      "label": "runs script",
+      "variant": "emphasis"
+    },
+    {
+      "id": "launch-next",
+      "from": "concurrent",
+      "to": "nextdev",
+      "label": "starts",
+      "variant": "emphasis"
+    },
+    {
+      "id": "launch-ws",
+      "from": "concurrent",
+      "to": "wsstart",
+      "label": "starts",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "boot-app",
+      "from": "nextdev",
+      "to": "appboot",
+      "label": "serves routes",
+      "variant": "default"
+    },
+    {
+      "id": "render-app",
+      "from": "appboot",
+      "to": "browser",
+      "label": "loads page",
+      "variant": "emphasis"
+    },
+    {
+      "id": "start-loop",
+      "from": "wsstart",
+      "to": "tickloop",
+      "label": "setInterval",
+      "variant": "dashed"
+    },
+    {
+      "id": "stream-browser",
+      "from": "tickloop",
+      "to": "browser",
+      "label": "WebSocket ticks",
+      "variant": "dashed",
+      "role": "async"
+    },
+    {
+      "id": "build-app",
+      "from": "build",
+      "to": "start",
+      "label": "then npm start",
+      "variant": "default",
+      "role": "branch"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Normal startup",
+      "items": [
+        "npm run dev launches Next.js and the WebSocket simulator together.",
+        "The simulator starts a recurring interval; it is the only verified background loop."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Unverified / absent",
+      "items": [
+        "No deployment, CI workflow, Docker, or cloud-infrastructure file was found.",
+        "README documents a production-style local run, but it still requires the WebSocket server to be started separately."
+      ]
+    }
+  ]
+}

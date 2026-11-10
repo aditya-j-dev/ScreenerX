@@ -23,5 +23,5 @@ export async function cacheStockUniverse(stocks: Stock[]) {
 export async function getCachedStockUniverse(): Promise<Stock[] | undefined> {
   const database = await getDatabase();
   const cached = (await database.get(STORE_NAME, CACHE_KEY)) as { stocks?: Stock[] } | undefined;
-  return cached?.stocks;
+  return Array.isArray(cached?.stocks) ? cached.stocks : undefined;
 }

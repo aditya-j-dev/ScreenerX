@@ -16,7 +16,7 @@ describe('price simulation utilities', () => {
   it('produces finite gaussian values and bounded price steps', () => {
     expect(Number.isFinite(gaussianRandom(() => 0.5))).toBe(true);
     expect(simulateNextPrice(100, 0.02, 0.0001, 1 / 252, -100)).toBeGreaterThanOrEqual(0.1);
-    expect(combineSectorShock(1, 0.6, 0)).toBeCloseTo(0.6);
+    expect(combineSectorShock(1, 0.6, 0)).toBeCloseTo(Math.sqrt(0.6));
   });
 
   it('uses the documented NSE market-hour multipliers', () => {

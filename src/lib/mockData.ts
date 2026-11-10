@@ -1,4 +1,5 @@
 import type { MarketCapCategory, OHLCV, Sector, Stock } from '@/types/stock';
+import { calculateRSI } from '@/lib/indicators';
 
 type SectorProfile = {
   sector: Sector;
@@ -131,14 +132,6 @@ const SUFFIXES = [
   'Infra',
   'Foods',
 ];
-const INDICES = [
-  'NIFTY 50',
-  'NIFTY Next 50',
-  'NIFTY Midcap 100',
-  'NIFTY Smallcap 250',
-  'BSE Sensex',
-];
-
 const CAP_BUCKETS: Array<{ category: MarketCapCategory; share: number; range: [number, number] }> =
   [
     { category: 'Large Cap', share: 0.02, range: [50000, 2000000] },
@@ -185,7 +178,45 @@ function repeatProfiles(count: number) {
 
   while (profiles.length < count)
     profiles.push(SECTOR_PROFILES[profiles.length % SECTOR_PROFILES.length]);
-  return profiles.slice(0, count);
+  const result = profiles.slice(0, count);
+  // Independent seeded shuffle prevents cap-bucket order from determining sector.
+  const random = seededRandom(2026);
+  for (let index = result.length - 1; index > 0; index--) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+  return result;
+}
+
+/** Synthetic recent closes for the universe RSI, with a persistent trend plus daily noise.
+ * These are not exchange data; chart OHLCV generation is a separate mock model. */
+export function generateRecentCloses(id: number, lastPrice: number): number[] {
+  const random = seededRandom(id * 7919);
+  const trend = between(random, [-0.012, 0.012]);
+  const closes = [100];
+  for (let index = 1; index <= 60; index++) {
+    closes.push(closes[index - 1] * (1 + trend + between(random, [-0.025, 0.025])));
+  }
+  const scale = lastPrice / closes[closes.length - 1];
+  return closes.map((close) => close * scale);
+}
+
+/** Rank-based mock membership, not official exchange eligibility or actual constituents. */
+function assignIndexMembership(stocks: Stock[]) {
+  const ranked = (category: MarketCapCategory) =>
+    stocks
+      .filter((stock) => stock.marketCapCategory === category)
+      .sort((a, b) => b.marketCap - a.marketCap);
+  const largeCaps = ranked('Large Cap');
+  largeCaps.slice(0, 50).forEach((stock) => stock.indexMembership.push('NIFTY 50'));
+  largeCaps.slice(50, 100).forEach((stock) => stock.indexMembership.push('NIFTY Next 50'));
+  largeCaps.slice(0, 30).forEach((stock) => stock.indexMembership.push('BSE Sensex'));
+  ranked('Mid Cap')
+    .slice(0, 100)
+    .forEach((stock) => stock.indexMembership.push('NIFTY Midcap 100'));
+  ranked('Small Cap')
+    .slice(0, 250)
+    .forEach((stock) => stock.indexMembership.push('NIFTY Smallcap 250'));
 }
 
 function capBucketFor(index: number, count: number) {
@@ -210,24 +241,24 @@ export function generateMockStocks(count = 5000): Stock[] {
   const now = Date.now();
   const sectorProfiles = repeatProfiles(count);
 
-  return Array.from({ length: count }, (_, index) => {
+  const stocks: Stock[] = Array.from({ length: count }, (_, index) => {
     const profile = sectorProfiles[index];
     const capBucket = capBucketFor(index, count);
     const marketCap = Math.round(between(rand, capBucket.range));
     const lastPrice = rounded(between(rand, [50, Math.min(5000, 150 + Math.sqrt(marketCap) * 4)]));
-    const changePercent = rounded(between(rand, [-5, 5]));
-    const previousClose = rounded(lastPrice / (1 + changePercent / 100));
+    const recentCloses = generateRecentCloses(index + 1, lastPrice);
+    const previousClose = rounded(recentCloses[recentCloses.length - 2]);
+    const changePercent = rounded(((lastPrice - previousClose) / previousClose) * 100);
     const changeAbsolute = rounded(lastPrice - previousClose);
     const dayOpen = rounded(previousClose * (1 + between(rand, [-0.01, 0.01])));
     const dayHigh = rounded(Math.max(lastPrice, dayOpen) * (1 + between(rand, [0.002, 0.03])));
     const dayLow = rounded(Math.min(lastPrice, dayOpen) * (1 - between(rand, [0.002, 0.03])));
     const avgVolume20D = Math.round(between(rand, [10000, 5000000]));
     const hasLargeMove = Math.abs(changePercent) >= 2;
-    const volume = Math.round(avgVolume20D * between(rand, hasLargeMove ? [1.5, 3] : [0.6, 1.3]));
+    const volume = Math.round(avgVolume20D * between(rand, hasLargeMove ? [1.5, 4] : [0.6, 1.3]));
     const revenueGrowthYoY = rounded(between(rand, [-20, 60]));
-    const rsi14 = rounded(
-      changePercent >= 0 ? between(rand, [50.1, 85]) : between(rand, [15, 49.9]),
-    );
+    const rsiValues = calculateRSI(recentCloses, 14);
+    const rsi14 = rounded(rsiValues[rsiValues.length - 1]!);
     const sma50 = rounded(
       lastPrice * (changePercent >= 0 ? between(rand, [0.88, 0.99]) : between(rand, [1.01, 1.12])),
     );
@@ -241,9 +272,9 @@ export function generateMockStocks(count = 5000): Stock[] {
     const priceVsSma50 = lastPrice >= sma50 ? 'Above' : 'Below';
     const priceVsSma200 = lastPrice >= sma200 ? 'Above' : 'Below';
     const volumeVsAvg =
-      volume >= avgVolume20D * 2.5
+      volume >= avgVolume20D * 3
         ? '3x'
-        : volume >= avgVolume20D * 1.5
+        : volume >= avgVolume20D * 2
           ? '2x'
           : volume >= avgVolume20D
             ? 'Above'
@@ -258,10 +289,7 @@ export function generateMockStocks(count = 5000): Stock[] {
       industry: profile.industries[index % profile.industries.length],
       marketCap,
       marketCapCategory: capBucket.category,
-      indexMembership:
-        capBucket.category === 'Large Cap'
-          ? ['NIFTY 50', 'BSE Sensex']
-          : INDICES.filter(() => rand() > 0.7),
+      indexMembership: [],
       lastPrice,
       previousClose,
       dayOpen,
@@ -304,27 +332,48 @@ export function generateMockStocks(count = 5000): Stock[] {
       updatedAt: now,
     };
   });
+  assignIndexMembership(stocks);
+  return stocks;
 }
 
 export function generateHistory(stock: Stock, days = 252): OHLCV[] {
-  const rand = seededRandom(stock.id * 97);
-  let close = stock.lastPrice * (0.65 + rand() * 0.2);
-  const start = Math.floor(Date.now() / 86400000) - days;
-
-  return Array.from({ length: days }, (_, index) => {
-    const open = close;
-    close = Math.max(1, close * (1 + (rand() - 0.48) * 0.06));
-    const high = Math.max(open, close) * (1 + rand() * 0.025);
-    const low = Math.min(open, close) * (1 - rand() * 0.025);
-    return {
-      time: (start + index) * 86400,
+  const count = Number.isFinite(days) ? Math.max(0, Math.floor(days)) : 0;
+  if (!count) return [];
+  const recent = generateRecentCloses(stock.id, stock.lastPrice);
+  const closesAgo = [...recent].reverse();
+  const random = seededRandom(stock.id * 97);
+  while (closesAgo.length <= count) {
+    closesAgo.push(
+      Math.max(0.01, closesAgo[closesAgo.length - 1] / (1 + between(random, [-0.03, 0.03]))),
+    );
+  }
+  const date = new Date();
+  date.setUTCHours(0, 0, 0, 0);
+  const candles: OHLCV[] = [];
+  for (let ago = 0; ago < count; ago++) {
+    // Weekday simulation only: exchange holidays are not modeled.
+    while (date.getUTCDay() === 0 || date.getUTCDay() === 6) date.setUTCDate(date.getUTCDate() - 1);
+    const candleRandom = seededRandom(stock.id * 193 + ago * 997);
+    const open = ago === 0 ? stock.dayOpen : closesAgo[ago + 1];
+    const close = ago === 0 ? stock.lastPrice : closesAgo[ago];
+    candles.push({
+      time: Math.floor(date.getTime() / 1000),
       open,
-      high,
-      low,
       close,
-      volume: Math.round(50000 + rand() * 1000000),
-    };
-  });
+      high:
+        ago === 0
+          ? Math.max(stock.dayHigh, open, close)
+          : Math.max(open, close) * (1 + candleRandom() * 0.025),
+      low:
+        ago === 0
+          ? Math.min(stock.dayLow, open, close)
+          : Math.min(open, close) * (1 - candleRandom() * 0.025),
+      volume:
+        ago === 0 ? stock.volume : Math.round(stock.avgVolume20D * (0.5 + candleRandom() * 2)),
+    });
+    date.setUTCDate(date.getUTCDate() - 1);
+  }
+  return candles.reverse();
 }
 
 /** Combines consecutive trading-day candles into one OHLCV candle without losing price extremes or volume. */

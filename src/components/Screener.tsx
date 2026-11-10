@@ -18,6 +18,7 @@ import { useRealtimeUpdates } from '@/hooks/useWebSocket';
 import { filterStocks, sortStocks } from '@/lib/filterEngine';
 import { generateHistory } from '@/lib/mockData';
 import { useStockStore } from '@/stores/stockStore';
+import type { Stock } from '@/types/stock';
 
 const EMPTY_LIVE_PRICES = new Map();
 const StockChart = dynamic(
@@ -28,10 +29,44 @@ const StockChart = dynamic(
   },
 );
 
+// Live chart ticks stay local instead of rerendering the grid's parent.
+function SelectedStockChart({ stock }: { stock: Stock }) {
+  const selectedLivePrice = useStockStore((state) => state.livePrices.get(stock.symbol));
+  // 1,260 simulated weekday sessions support the chart's approximate 5Y weekly view.
+  const history = useMemo(() => generateHistory(stock, 1260), [stock]);
+  const chartData = useMemo(() => {
+    if (!selectedLivePrice || history.length === 0) return history;
+    const previousCandle = history[history.length - 1];
+    if (!previousCandle) return history;
+    const updatedCandle = {
+      ...previousCandle,
+      close: selectedLivePrice.price,
+      high: Math.max(previousCandle.high, selectedLivePrice.observedHigh),
+      low: Math.min(previousCandle.low, selectedLivePrice.observedLow),
+    };
+    return [...history.slice(0, -1), updatedCandle];
+  }, [history, selectedLivePrice]);
+  return <StockChart symbol={stock.symbol} data={chartData} />;
+}
+
+function SelectedStockPrice({ stock }: { stock: Stock }) {
+  const price = useStockStore(
+    (state) => state.livePrices.get(stock.symbol)?.price ?? stock.lastPrice,
+  );
+  return (
+    <span className="font-semibold text-emerald-400">
+      {'\u20b9'}
+      {price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+    </span>
+  );
+}
+
 export function Screener() {
   useRealtimeUpdates();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'grid' | 'chart'>('grid');
+  const filterButtonRef = useRef<HTMLButtonElement>(null);
+  const filterDialogRef = useRef<HTMLDivElement>(null);
   const chartPanelRef = useRef<HTMLElement>(null);
   const touchStartX = useRef<number | null>(null);
   const isSingleTouchSwipe = useRef(false);
@@ -42,11 +77,47 @@ export function Screener() {
       if (!chartPanel) return;
       window.scrollTo({
         top: chartPanel.getBoundingClientRect().top + window.scrollY - 16,
-        behavior: 'smooth',
+        behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+          ? 'auto'
+          : 'smooth',
       });
       chartPanel.focus({ preventScroll: true });
     });
   }, []);
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const dialog = filterDialogRef.current;
+    const trigger = filterButtonRef.current;
+    // Clearing the last filter disables its button, which can move native focus
+    // outside the dialog. Escape must still dismiss the open modal.
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) {
+        event.preventDefault();
+        setFiltersOpen(false);
+      }
+    };
+    document.addEventListener('keydown', dismissOnEscape);
+    dialog?.querySelector<HTMLElement>('button, input')?.focus();
+    // Make content outside the modal unavailable to keyboard and assistive technology.
+    const outside: Array<{ element: HTMLElement; inert: boolean }> = [];
+    let branch: HTMLElement | null = dialog;
+    while (branch?.parentElement) {
+      for (const sibling of Array.from(branch.parentElement.children)) {
+        if (sibling !== branch && sibling instanceof HTMLElement) {
+          outside.push({ element: sibling, inert: sibling.inert });
+          sibling.inert = true;
+        }
+      }
+      branch = branch.parentElement;
+    }
+    return () => {
+      document.removeEventListener('keydown', dismissOnEscape);
+      outside.forEach(({ element, inert }) => {
+        element.inert = inert;
+      });
+      trigger?.focus();
+    };
+  }, [filtersOpen]);
   const startMobileSwipe = (event: ReactTouchEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
     const startX = event.touches[0]?.clientX;
@@ -80,14 +151,10 @@ export function Screener() {
   };
   const isOnline = useNetworkStatus();
 
-  const { data = [], isLoading, error } = useStockData();
+  const { data = [], isLoading, error, isCached } = useStockData();
   const filters = useStockStore((state) => state.activeFilters);
   const sort = useStockStore((state) => state.sortConfig);
   const selected = useStockStore((state) => state.selectedSymbol);
-  // This granular selector updates the chart only when its selected symbol receives a tick.
-  const selectedLivePrice = useStockStore((state) =>
-    selected ? state.livePrices.get(selected) : undefined,
-  );
   const connection = useStockStore((state) => state.connection);
   const setSelected = useStockStore((state) => state.setSelected);
   const watchlist = useStockStore((state) => state.watchlist);
@@ -125,23 +192,6 @@ export function Screener() {
     revealChart();
     return undefined;
   }, [revealChart, selected]);
-  // Five years of daily candles give the chart enough source data for its 5Y weekly view.
-  const history = useMemo(
-    () => (selectedStock ? generateHistory(selectedStock, 1260) : []),
-    [selectedStock],
-  );
-  const chartData = useMemo(() => {
-    if (!selectedLivePrice || history.length === 0) return history;
-    const previousCandle = history[history.length - 1];
-    if (!previousCandle) return history;
-    const updatedCandle = {
-      ...previousCandle,
-      close: selectedLivePrice.price,
-      high: Math.max(previousCandle.high, selectedLivePrice.price),
-      low: Math.min(previousCandle.low, selectedLivePrice.price),
-    };
-    return [...history.slice(0, -1), updatedCandle];
-  }, [history, selectedLivePrice]);
   const connectionIndicator =
     connection === 'open'
       ? { colour: 'bg-emerald-400', label: 'LIVE STREAM' }
@@ -159,18 +209,32 @@ export function Screener() {
     );
   }
 
-  if (error) {
-    return <div className="p-10 text-red-400">Unable to load stock universe.</div>;
+  if (error && data.length === 0) {
+    return (
+      <div role="alert" className="p-10 text-red-400">
+        {isOnline
+          ? 'Unable to load stock universe.'
+          : 'No offline stock data available. Connect to the internet and reload.'}
+      </div>
+    );
   }
 
   return (
     <main className="min-h-screen bg-black text-neutral-100">
-      {!isOnline && (
+      <a
+        href="#stock-grid"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:bg-black focus:p-3"
+      >
+        Skip to stock grid
+      </a>
+      {(!isOnline || isCached || error) && (
         <div
           role="status"
           className="border-b border-amber-400/30 bg-amber-400/10 px-4 py-2 text-center text-sm font-medium text-amber-200"
         >
-          Working offline - prices may be stale
+          {!isOnline
+            ? 'Working offline - prices may be stale'
+            : 'Showing saved data - prices may be stale'}
         </div>
       )}
       <header className="border-b border-neutral-800 bg-black/90 px-4 py-4 sm:px-6">
@@ -195,6 +259,10 @@ export function Screener() {
         <div className="flex flex-col gap-2 rounded-xl border border-neutral-800 bg-neutral-900/70 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
+            ref={filterButtonRef}
+            aria-label="Filters"
+            aria-expanded={filtersOpen}
+            aria-controls="filter-dialog"
             onClick={() => setFiltersOpen(true)}
             className="inline-flex items-center gap-2 rounded-lg border border-neutral-700 bg-black px-3 py-1.5 text-sm font-medium text-neutral-200 hover:border-emerald-500 hover:text-emerald-300"
           >
@@ -203,7 +271,12 @@ export function Screener() {
               {filters.length}
             </span>
           </button>
-          <span className="text-xs text-neutral-400">
+          <span
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="text-xs text-neutral-400"
+          >
             Showing{' '}
             <span className="font-semibold text-emerald-300">
               {filtered.length.toLocaleString()}
@@ -216,11 +289,41 @@ export function Screener() {
           <>
             <button
               type="button"
-              aria-label="Close filters"
+              aria-hidden="true"
+              tabIndex={-1}
               onClick={() => setFiltersOpen(false)}
               className="fixed inset-0 z-40 cursor-default bg-black/55"
             />
-            <div className="fixed left-3 top-16 z-50 w-[calc(100vw-1.5rem)] max-w-80 sm:left-4 sm:top-20">
+            <div
+              id="filter-dialog"
+              ref={filterDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Stock filters"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setFiltersOpen(false);
+                }
+                if (event.key === 'Tab') {
+                  const controls = Array.from(
+                    event.currentTarget.querySelectorAll<HTMLElement>(
+                      'button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]',
+                    ),
+                  );
+                  const first = controls[0],
+                    last = controls[controls.length - 1];
+                  if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last?.focus();
+                  } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first?.focus();
+                  }
+                }
+              }}
+              className="fixed left-3 top-16 z-50 w-[calc(100vw-1.5rem)] max-w-80 sm:left-4 sm:top-20"
+            >
               <FilterPanel
                 matchingCount={filtered.length}
                 totalCount={data.length}
@@ -261,7 +364,7 @@ export function Screener() {
         >
           <section className={`min-w-0 ${mobileView === 'chart' ? 'hidden md:block' : ''}`}>
             <FeatureErrorBoundary>
-              <StockTable stocks={filtered} onStockSelect={revealChart} />
+              <StockTable stocks={filtered} totalCount={data.length} onStockSelect={revealChart} />
             </FeatureErrorBoundary>
           </section>
 
@@ -280,13 +383,7 @@ export function Screener() {
                 {selectedStock ? (
                   <p className="text-xs text-neutral-400">
                     {selectedStock.companyName} <span className="mx-1 text-neutral-400">•</span>{' '}
-                    <span className="font-semibold text-emerald-400">
-                      ₹
-                      {(selectedLivePrice?.price ?? selectedStock.lastPrice).toLocaleString(
-                        'en-IN',
-                        { minimumFractionDigits: 2, maximumFractionDigits: 2 },
-                      )}
-                    </span>
+                    <SelectedStockPrice stock={selectedStock} />
                   </p>
                 ) : (
                   <p className="text-xs text-neutral-400">
@@ -306,7 +403,7 @@ export function Screener() {
             </div>
             {selectedStock ? (
               <FeatureErrorBoundary>
-                <StockChart symbol={selectedStock.symbol} data={chartData} />
+                <SelectedStockChart stock={selectedStock} />
               </FeatureErrorBoundary>
             ) : (
               <div className="flex h-[430px] items-center justify-center text-neutral-400">

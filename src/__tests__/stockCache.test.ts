@@ -46,4 +46,9 @@ describe('stock universe cache', () => {
     indexedDb.get.mockResolvedValueOnce(undefined);
     await expect(getCachedStockUniverse()).resolves.toBeUndefined();
   });
+
+  it('ignores a malformed cached universe', async () => {
+    indexedDb.get.mockResolvedValueOnce({ stocks: { bad: true } });
+    await expect(getCachedStockUniverse()).resolves.toBeUndefined();
+  });
 });

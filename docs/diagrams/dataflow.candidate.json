@@ -1,0 +1,222 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "ScreenerX Data Flow",
+    "subtitle": "Verified browser-side flow for simulated stocks, offline caching, filters, and live ticks.",
+    "output": "docs/diagrams/dataflow.html",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "viewBox": [1300, 780],
+    "repository": {
+      "url": "https://github.com/aditya-j-dev/ScreenerX.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "e685d9beeaad31c8bd681d30449935c616f3d188"
+    }
+  },
+  "stages": [
+    { "label": "Sources" },
+    { "label": "Load" },
+    { "label": "Client State" },
+    { "label": "Derive / Store" },
+    { "label": "Present" }
+  ],
+  "nodes": [
+    {
+      "id": "mock",
+      "type": "backend",
+      "label": "Mock generator",
+      "sublabel": "stocks and OHLCV",
+      "stage": 0,
+      "row": 0,
+      "width": 150,
+      "sources": [{ "path": "src/lib/mockData.ts", "line": 208, "end_line": 327 }]
+    },
+    {
+      "id": "stream",
+      "type": "backend",
+      "label": "WebSocket simulator",
+      "sublabel": "price updates",
+      "stage": 0,
+      "row": 2,
+      "width": 150,
+      "sources": [{ "path": "server/ws-server.ts", "line": 46, "end_line": 79 }]
+    },
+    {
+      "id": "user",
+      "type": "external",
+      "label": "User browser",
+      "sublabel": "filter and sort input",
+      "stage": 0,
+      "row": 4,
+      "width": 150,
+      "sources": [
+        { "path": "src/components/FilterPanel/FilterPanel.tsx", "line": 107, "end_line": 136 }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Stocks API",
+      "sublabel": "GET /api/stocks",
+      "stage": 1,
+      "row": 0,
+      "width": 150,
+      "sources": [{ "path": "src/app/api/stocks/route.ts", "line": 4, "end_line": 19 }]
+    },
+    {
+      "id": "query",
+      "type": "frontend",
+      "label": "React Query",
+      "sublabel": "universe response cache",
+      "stage": 2,
+      "row": 0,
+      "width": 160,
+      "sources": [{ "path": "src/hooks/useStockData.ts", "line": 17, "end_line": 33 }]
+    },
+    {
+      "id": "store",
+      "type": "frontend",
+      "label": "Zustand",
+      "sublabel": "filters and live prices",
+      "stage": 2,
+      "row": 2,
+      "width": 160,
+      "sources": [
+        { "path": "src/stores/stockStore.ts", "line": 38, "end_line": 96 },
+        { "path": "src/hooks/useWebSocket.ts", "line": 33, "end_line": 44 }
+      ]
+    },
+    {
+      "id": "derive",
+      "type": "frontend",
+      "label": "Screener derivation",
+      "sublabel": "enrich, filter, sort",
+      "stage": 3,
+      "row": 0,
+      "width": 165,
+      "sources": [{ "path": "src/components/Screener.tsx", "line": 101, "end_line": 120 }]
+    },
+    {
+      "id": "indexed",
+      "type": "database",
+      "label": "IndexedDB",
+      "sublabel": "offline universe cache",
+      "stage": 3,
+      "row": 4,
+      "width": 160,
+      "sources": [{ "path": "src/lib/stockCache.ts", "line": 16, "end_line": 26 }]
+    },
+    {
+      "id": "views",
+      "type": "frontend",
+      "label": "Table and chart",
+      "sublabel": "grid and selected stock",
+      "stage": 4,
+      "row": 1,
+      "width": 165,
+      "sources": [
+        { "path": "src/components/Screener.tsx", "line": 257, "end_line": 315 },
+        { "path": "src/components/DataGrid/StockTable.tsx", "line": 93, "end_line": 133 }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "stocks",
+      "from": "mock",
+      "to": "api",
+      "label": "stocks",
+      "classification": "simulated",
+      "variant": "emphasis",
+      "labelDy": -35
+    },
+    {
+      "id": "response",
+      "from": "api",
+      "to": "query",
+      "label": "HTTP JSON",
+      "classification": "response",
+      "variant": "emphasis",
+      "labelDy": -35
+    },
+    {
+      "id": "cache",
+      "from": "query",
+      "to": "indexed",
+      "label": "cache",
+      "classification": "browser storage",
+      "variant": "dashed",
+      "labelAt": [638, 429]
+    },
+    {
+      "id": "universe",
+      "from": "query",
+      "to": "derive",
+      "label": "universe",
+      "classification": "in memory",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": -35
+    },
+    {
+      "id": "filters",
+      "from": "user",
+      "to": "store",
+      "label": "filters",
+      "classification": "interaction",
+      "variant": "default"
+    },
+    {
+      "id": "ticks",
+      "from": "stream",
+      "to": "store",
+      "label": "ticks",
+      "classification": "WebSocket",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": -35
+    },
+    {
+      "id": "state",
+      "from": "store",
+      "to": "views",
+      "label": "live state",
+      "classification": "shared state",
+      "variant": "default",
+      "route": "bottom-channel",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "channelY": 700,
+      "labelDy": 15
+    },
+    {
+      "id": "results",
+      "from": "derive",
+      "to": "views",
+      "label": "results",
+      "classification": "render input",
+      "variant": "emphasis",
+      "labelAt": [853, 315]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Offline fallback",
+      "items": [
+        "Successful API responses are saved to IndexedDB.",
+        "On a fetch failure, the hook reads the prior cached universe when available."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Live data",
+      "items": [
+        "The stream is a local simulator, not an external price feed.",
+        "The browser batches ticks before placing them in Zustand."
+      ]
+    }
+  ]
+}

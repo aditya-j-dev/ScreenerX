@@ -118,7 +118,7 @@ describe('Technical Indicator Calculations', () => {
       expect(profile[0]).toHaveProperty('volume');
     });
 
-    it('places volume in the exact bucket determined by each closing price', () => {
+    it('allocates volume in proportion to low-high overlap with each bucket', () => {
       const candles = [
         { time: 1, open: 100, high: 110, low: 90, close: 105, volume: 1000 },
         { time: 2, open: 105, high: 115, low: 95, close: 110, volume: 2000 },
@@ -126,7 +126,8 @@ describe('Technical Indicator Calculations', () => {
       const profile = calculateVolumeProfile(candles, 5);
 
       expect(profile.map((bucket) => bucket.price)).toEqual([92.5, 97.5, 102.5, 107.5, 112.5]);
-      expect(profile.map((bucket) => bucket.volume)).toEqual([0, 0, 0, 1000, 2000]);
+      // First candle: 250 per bucket across 90-110. Second: 500 across 95-115.
+      expect(profile.map((bucket) => bucket.volume)).toEqual([250, 750, 750, 750, 500]);
     });
 
     it('preserves total traded volume across all buckets', () => {
@@ -136,11 +137,35 @@ describe('Technical Indicator Calculations', () => {
       ];
       expect(
         calculateVolumeProfile(candles, 4).reduce((total, bucket) => total + bucket.volume, 0),
-      ).toBe(500);
+      ).toBeCloseTo(500, 8);
     });
 
     it('returns no buckets for an empty candle list', () => {
       expect(calculateVolumeProfile([], 5)).toEqual([]);
+    });
+
+    it('handles a flat price range without dividing by zero or losing volume', () => {
+      expect(
+        calculateVolumeProfile(
+          [{ time: 1, open: 10, high: 10, low: 10, close: 10, volume: 100 }],
+          40,
+        ),
+      ).toEqual([{ price: 10, volume: 100 }]);
+    });
+
+    it('puts a zero-range candle on a boundary in one bucket', () => {
+      const profile = calculateVolumeProfile(
+        [
+          { time: 1, open: 10, high: 20, low: 10, close: 15, volume: 100 },
+          { time: 2, open: 20, high: 20, low: 20, close: 20, volume: 50 },
+        ],
+        2,
+      );
+      expect(profile.map((bucket) => bucket.volume)).toEqual([50, 100]);
+    });
+
+    it.each([0, -1, 2.5, Infinity])('rejects invalid bucket count %s', (buckets) => {
+      expect(() => calculateVolumeProfile([], buckets)).toThrow(RangeError);
     });
   });
 });

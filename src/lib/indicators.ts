@@ -55,15 +55,28 @@ export function calculateRSI(values: number[], period = 14): (number | undefined
   }
   return out;
 }
-export function calculateVolumeProfile(candles: OHLCV[], buckets = 18) {
+export function calculateVolumeProfile(candles: OHLCV[], buckets = 40) {
+  if (!Number.isInteger(buckets) || buckets < 1)
+    throw new RangeError('Buckets must be a positive integer');
   if (!candles.length) return [];
   const min = Math.min(...candles.map((c) => c.low)),
     max = Math.max(...candles.map((c) => c.high));
-  const step = (max - min || 1) / buckets;
+  if (max === min)
+    return [{ price: min, volume: candles.reduce((sum, candle) => sum + candle.volume, 0) }];
+  const step = (max - min) / buckets;
   const volumes = Array(buckets).fill(0) as number[];
   for (const c of candles) {
-    const idx = Math.min(buckets - 1, Math.floor((c.close - min) / step));
-    volumes[idx] += c.volume;
+    if (c.high === c.low) {
+      const index = Math.max(0, Math.min(buckets - 1, Math.floor((c.low - min) / step)));
+      volumes[index] += c.volume;
+      continue;
+    }
+    for (let index = 0; index < buckets; index++) {
+      const lower = min + index * step;
+      const upper = index === buckets - 1 ? max : lower + step;
+      const overlap = Math.max(0, Math.min(c.high, upper) - Math.max(c.low, lower));
+      volumes[index] += (c.volume * overlap) / (c.high - c.low);
+    }
   }
   return volumes.map((volume, i) => ({ price: min + step * (i + 0.5), volume }));
 }

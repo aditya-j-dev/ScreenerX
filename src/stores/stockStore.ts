@@ -2,13 +2,41 @@
 
 import { create } from 'zustand';
 import { enableMapSet } from 'immer';
-import { devtools, persist } from 'zustand/middleware';
+import { createJSONStorage, devtools, persist, type PersistStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { FilterConfig, PriceUpdate, SortConfig, Stock } from '../types/stock';
 
 enableMapSet();
 
-export type LivePrice = PriceUpdate & { updatedAt: number };
+type SavedWatchlist = { watchlist: string[] };
+
+// Immer preserves the Set reference on unrelated updates. Reuse its JSON-safe
+// projection, then skip storage before JSON.stringify or synchronous setItem.
+let projectedWatchlist: Set<string> | undefined;
+let projectedSymbols: string[] = [];
+const jsonStorage = createJSONStorage<SavedWatchlist>(() => localStorage);
+let lastSavedSymbols: string[] | undefined;
+const watchlistStorage: PersistStorage<SavedWatchlist> | undefined = jsonStorage && {
+  getItem: (name) => {
+    lastSavedSymbols = undefined;
+    return jsonStorage.getItem(name);
+  },
+  setItem: (name, value) => {
+    if (value.state.watchlist === lastSavedSymbols) return;
+    jsonStorage.setItem(name, value);
+    lastSavedSymbols = value.state.watchlist;
+  },
+  removeItem: (name) => {
+    lastSavedSymbols = undefined;
+    return jsonStorage.removeItem(name);
+  },
+};
+
+export type LivePrice = PriceUpdate & {
+  updatedAt: number;
+  observedHigh: number;
+  observedLow: number;
+};
 export type ConnectionStatus = 'connecting' | 'reconnecting' | 'open' | 'closed';
 
 interface StockStore {
@@ -21,6 +49,7 @@ interface StockStore {
   addFilter: (filter: FilterConfig) => void;
   removeFilter: (id: string) => void;
   clearAllFilters: () => void;
+  applyPreset: (filters: ReadonlyArray<Omit<FilterConfig, 'enabled'>>) => void;
   setSortConfig: (sortConfig: SortConfig) => void;
   setSelectedSymbol: (symbol: string | null) => void;
   batchUpdatePrices: (updates: Map<string, PriceUpdate>) => void;
@@ -57,13 +86,27 @@ export const useStockStore = create<StockStore>()(
             set((state) => {
               state.activeFilters = [];
             }),
+          applyPreset: (filters) =>
+            set({
+              activeFilters: filters.map((filter) => ({
+                ...filter,
+                value: Array.isArray(filter.value) ? filter.value.slice() : filter.value,
+                enabled: true,
+              })),
+            }),
           setSortConfig: (sortConfig) => set({ sortConfig }),
           setSelectedSymbol: (selectedSymbol) => set({ selectedSymbol }),
           batchUpdatePrices: (updates) =>
             set((state) => {
               const updatedAt = Date.now();
               updates.forEach((update, symbol) => {
-                state.livePrices.set(symbol, { ...update, updatedAt });
+                const previous = state.livePrices.get(symbol);
+                state.livePrices.set(symbol, {
+                  ...update,
+                  updatedAt,
+                  observedHigh: Math.max(previous?.observedHigh ?? update.price, update.price),
+                  observedLow: Math.min(previous?.observedLow ?? update.price, update.price),
+                });
               });
             }),
           toggleWatchlist: (symbol) =>
@@ -89,9 +132,26 @@ export const useStockStore = create<StockStore>()(
         }),
         {
           name: 'stock-screener',
-          partialize: (state) => ({ watchlist: Array.from(state.watchlist) }),
-          onRehydrateStorage: () => (state) => {
-            if (state && Array.isArray(state.watchlist)) state.watchlist = new Set(state.watchlist);
+          storage: watchlistStorage,
+          partialize: (state) => {
+            if (state.watchlist !== projectedWatchlist) {
+              projectedWatchlist = state.watchlist;
+              projectedSymbols = Array.from(state.watchlist);
+            }
+            return { watchlist: projectedSymbols };
+          },
+          merge: (persistedState, currentState) => {
+            // Restore only the persisted domain and preserve the Set contract before notifying listeners.
+            const saved = persistedState as { watchlist?: unknown } | null | undefined;
+            if (!Array.isArray(saved?.watchlist)) return currentState;
+            return {
+              ...currentState,
+              watchlist: new Set(
+                saved.watchlist.filter(
+                  (symbol): symbol is string => typeof symbol === 'string' && symbol.length > 0,
+                ),
+              ),
+            };
           },
         },
       ),

@@ -21,17 +21,24 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { formatMarketCap, formatPriceINR, formatVolume, getRsiTone } from '@/lib/formatters';
-import {
-  getGridKeyboardAction,
-  getNextFocusRegionIndex,
-  getViewportRowCount,
-  moveGridIndex,
-} from '@/lib/gridKeyboard';
+import { getGridKeyboardAction, getViewportRowCount, moveGridIndex } from '@/lib/gridKeyboard';
 import { clampScrollRowIndex, VIRTUAL_OVERSCAN, VIRTUAL_ROW_HEIGHT } from '@/lib/virtualGrid';
 import { useStockStore } from '@/stores/stockStore';
 import type { Stock } from '@/types/stock';
 
 const columnHelper = createColumnHelper<Stock>();
+const PRICE_FIELDS = new Set<keyof Stock>([
+  'previousClose',
+  'dayOpen',
+  'dayHigh',
+  'dayLow',
+  'week52High',
+  'week52Low',
+  'eps',
+  'sma50',
+  'sma200',
+  'atr',
+]);
 
 export interface StockTableHandle {
   scrollToRow: (index: number) => void;
@@ -108,21 +115,21 @@ const LivePriceCell = memo(
       previousPrice.current = price;
       flashId.current += 1;
       setFlash({ direction, id: flashId.current });
-      const timer = window.setTimeout(() => setFlash(null), 600);
+      const timer = window.setTimeout(() => setFlash(null), 300);
       return () => window.clearTimeout(timer);
     }, [price]);
 
     const flashClass =
       flash?.direction === 'up'
-        ? 'animate-flash-green bg-emerald-500/20 text-emerald-300 [animation-duration:600ms]'
+        ? 'animate-flash-green bg-emerald-500/20 text-emerald-300 [animation-duration:300ms]'
         : flash?.direction === 'down'
-          ? 'animate-flash-red bg-red-500/20 text-red-300 [animation-duration:600ms]'
+          ? 'animate-flash-red bg-red-500/20 text-red-300 [animation-duration:300ms]'
           : '';
 
     return (
       <span
         key={flash?.id ?? 0}
-        className={`inline-flex rounded px-1.5 py-0.5 font-mono transition-colors ${flashClass}`}
+        className={`inline-flex rounded px-1.5 py-0.5 font-mono tabular-nums transition-colors ${flashClass}`}
       >
         {formatPriceINR(price)}
       </span>
@@ -141,6 +148,37 @@ type StaticStockCellProps = {
 
 /** Static cell content is isolated from row selection, scrolling state, and unrelated live-price ticks.
  *  Watchlist state is read with a per-symbol selector so only the affected symbol's star re-renders. */
+const LiveChangeCell = memo(
+  function LiveChangeCell({
+    symbol,
+    field,
+    initialValue,
+  }: {
+    symbol: string;
+    field: 'changePercent' | 'changeAbsolute';
+    initialValue: number;
+  }) {
+    const change = useStockStore((state) => {
+      const tick = state.livePrices.get(symbol);
+      return tick ? (field === 'changePercent' ? tick.changePercent : tick.change) : initialValue;
+    });
+    const colour =
+      change > 0 ? 'text-emerald-400' : change < 0 ? 'text-red-400' : 'text-neutral-400';
+    return (
+      <span className={`font-mono tabular-nums ${colour}`}>
+        {change > 0 ? '\u25b2' : change < 0 ? '\u25bc' : '\u2014'}{' '}
+        {field === 'changePercent'
+          ? `${Math.abs(change).toFixed(2)}%`
+          : formatPriceINR(Math.abs(change))}
+      </span>
+    );
+  },
+  (previous, next) =>
+    previous.symbol === next.symbol &&
+    previous.field === next.field &&
+    Object.is(previous.initialValue, next.initialValue),
+);
+
 const StaticStockCell = memo(
   function StaticStockCell({ field, stock, value, onToggleWatchlist }: StaticStockCellProps) {
     // Granular per-symbol selector: only re-renders this cell when THIS symbol's watchlist status changes.
@@ -166,23 +204,10 @@ const StaticStockCell = memo(
         </div>
       );
     }
-    if (field === 'changePercent') {
-      const direction = stock.changePercent > 0 ? 'up' : stock.changePercent < 0 ? 'down' : 'flat';
-      const colour =
-        direction === 'up'
-          ? 'text-emerald-400'
-          : direction === 'down'
-            ? 'text-red-400'
-            : 'text-neutral-400';
-      const marker = direction === 'up' ? '▲' : direction === 'down' ? '▼' : '—';
-      return (
-        <span className={`font-mono ${colour}`}>
-          {marker} {Math.abs(stock.changePercent).toFixed(2)}%
-        </span>
-      );
-    }
     if (field === 'volume' || field === 'avgVolume20D')
-      return <span className="font-mono">{formatVolume(stock[field] as number)}</span>;
+      return <span className="font-mono tabular-nums">{formatVolume(stock[field] as number)}</span>;
+    if (PRICE_FIELDS.has(field) && typeof value === 'number')
+      return <span className="font-mono tabular-nums">{formatPriceINR(value)}</span>;
     if (field === 'rsi14') {
       const tone = getRsiTone(stock.rsi14);
       const colour =
@@ -192,38 +217,55 @@ const StaticStockCell = memo(
             ? 'bg-emerald-500/20 text-emerald-400'
             : 'bg-amber-400/20 text-amber-300';
       return (
-        <span className={`rounded px-1.5 py-0.5 font-mono ${colour}`}>
+        <span className={`rounded px-1.5 py-0.5 font-mono tabular-nums ${colour}`}>
           {stock.rsi14.toFixed(1)}
         </span>
       );
     }
     if (field === 'marketCap')
-      return <span className="font-mono">{formatMarketCap(stock.marketCap)}</span>;
-    return <span className="block truncate">{formatValue(value)}</span>;
+      return <span className="font-mono tabular-nums">{formatMarketCap(stock.marketCap)}</span>;
+    return (
+      <span
+        className={`block truncate ${typeof value === 'number' ? 'font-mono tabular-nums' : ''}`}
+      >
+        {formatValue(value)}
+      </span>
+    );
   },
   (previous, next) => {
     if (previous.field !== next.field) return false;
-    if (previous.field === 'symbol') return previous.stock.symbol === next.stock.symbol;
+    if (previous.stock.symbol !== next.stock.symbol) return false;
+    if (previous.field === 'symbol') return previous.onToggleWatchlist === next.onToggleWatchlist;
     return Object.is(previous.value, next.value);
   },
 );
 
 export const StockTable = forwardRef<
   StockTableHandle,
-  { stocks: Stock[]; onStockSelect?: () => void }
->(function StockTable({ stocks, onStockSelect }, ref) {
+  { stocks: Stock[]; totalCount?: number; onStockSelect?: () => void }
+>(function StockTable({ stocks, totalCount = stocks.length, onStockSelect }, ref) {
   const parentRef = useRef<HTMLDivElement>(null);
   const selected = useStockStore((state) => state.selectedSymbol);
   const setSelected = useStockStore((state) => state.setSelected);
   const setSort = useStockStore((state) => state.setSort);
   const sort = useStockStore((state) => state.sortConfig);
   const toggleWatchlist = useStockStore((state) => state.toggleWatchlist);
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [requestedRowIndex, setSelectedIndex] = useState(0);
   const [activeColumnIndex, setActiveColumnIndex] = useState(0);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const helpCloseRef = useRef<HTMLButtonElement>(null);
   const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: ['symbol'] });
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [columnContextMenu, setColumnContextMenu] = useState<ColumnContextMenu | null>(null);
+  const columnMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!columnContextMenu) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    (columnMenuRef.current?.querySelector<HTMLElement>('button') ?? columnMenuRef.current)?.focus();
+    return () => {
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [columnContextMenu]);
   const columns = useMemo(
     () =>
       STOCK_COLUMNS.map(
@@ -238,6 +280,11 @@ export const StockTable = forwardRef<
               const stock = info.row.original;
               if (field === 'lastPrice') {
                 return <LivePriceCell symbol={stock.symbol} initialPrice={stock.lastPrice} />;
+              }
+              if (field === 'changePercent' || field === 'changeAbsolute') {
+                return (
+                  <LiveChangeCell symbol={stock.symbol} field={field} initialValue={stock[field]} />
+                );
               }
               return (
                 <StaticStockCell
@@ -260,15 +307,21 @@ export const StockTable = forwardRef<
     onColumnPinningChange: setColumnPinning,
     onColumnSizingChange: setColumnSizing,
     getCoreRowModel: getCoreRowModel(),
+    getRowId: (stock) => stock.symbol,
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
   });
   const rows = table.getRowModel().rows;
+  const selectedIndex = moveGridIndex(requestedRowIndex, 0, rows.length);
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => VIRTUAL_ROW_HEIGHT,
     overscan: VIRTUAL_OVERSCAN,
+    // Rows start below the sticky header; scroll targets must also clear both sticky bars.
+    scrollMargin: VIRTUAL_ROW_HEIGHT,
+    scrollPaddingStart: VIRTUAL_ROW_HEIGHT,
+    scrollPaddingEnd: 32,
   });
   const visibleColumns = table.getVisibleLeafColumns();
   const pinnedColumns = useMemo(
@@ -305,6 +358,22 @@ export const StockTable = forwardRef<
 
   useImperativeHandle(ref, () => ({ scrollToRow }), [scrollToRow]);
 
+  useEffect(() => {
+    setSelectedIndex(selectedIndex);
+    if (document.activeElement === parentRef.current && rows.length) scrollToRow(selectedIndex);
+  }, [rows.length, selectedIndex, scrollToRow]);
+
+  useEffect(() => {
+    if (!showHelpModal) return undefined;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const grid = parentRef.current;
+    helpCloseRef.current?.focus();
+    return () => {
+      if (previousFocus?.isConnected) previousFocus.focus();
+      else grid?.focus();
+    };
+  }, [showHelpModal]);
+
   const selectRow = (index: number, columnIndex = activeColumnIndex) => {
     setSelectedIndex(index);
     setActiveColumnIndex(columnIndex);
@@ -314,36 +383,18 @@ export const StockTable = forwardRef<
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const action = getGridKeyboardAction(event.key, event.shiftKey);
-      const isEditableControl = ['INPUT', 'SELECT', 'TEXTAREA'].includes(
-        (event.target as HTMLElement)?.tagName,
-      );
-      if (isEditableControl && action !== 'focus-next-region' && action !== 'focus-previous-region')
-        return;
-      const filterPanel = document.getElementById('filter-panel');
-      const chartPanel = document.getElementById('chart-panel');
       const grid = parentRef.current;
-      const target = event.target as Node;
-
+      // Native controls inside the grid (sort buttons, resize handles, watchlist)
+      // keep their own keyboard behavior. Tab follows the document's normal order.
       if (
-        (action === 'focus-next-region' || action === 'focus-previous-region') &&
-        filterPanel &&
-        chartPanel &&
-        grid
-      ) {
-        const focusOrder = [filterPanel, grid, chartPanel];
-        const currentRegion = focusOrder.findIndex((region) => region.contains(target));
-        if (currentRegion >= 0) {
-          event.preventDefault();
-          const nextRegion = getNextFocusRegionIndex(
-            currentRegion,
-            event.shiftKey,
-            focusOrder.length,
-          );
-          focusOrder[nextRegion].focus();
-          return;
-        }
-      }
+        event.target !== grid ||
+        event.defaultPrevented ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey
+      )
+        return;
+      const action = getGridKeyboardAction(event.key, event.shiftKey);
 
       if (action === 'toggle-help') {
         event.preventDefault();
@@ -397,15 +448,25 @@ export const StockTable = forwardRef<
       if (action === 'open-chart' && rows[selectedIndex]) {
         event.preventDefault();
         setSelected(rows[selectedIndex].original.symbol);
+        onStockSelect?.();
       }
       if (action === 'toggle-watchlist' && rows[selectedIndex]) {
         event.preventDefault();
         toggleWatchlist(rows[selectedIndex].original.symbol);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [rows, scrollToRow, selectedIndex, setSelected, toggleWatchlist, visibleColumns.length]);
+    const grid = parentRef.current;
+    grid?.addEventListener('keydown', handleKeyDown);
+    return () => grid?.removeEventListener('keydown', handleKeyDown);
+  }, [
+    onStockSelect,
+    rows,
+    scrollToRow,
+    selectedIndex,
+    setSelected,
+    toggleWatchlist,
+    visibleColumns.length,
+  ]);
 
   useEffect(() => {
     const activeColumn = visibleColumns[activeColumnIndex];
@@ -430,18 +491,28 @@ export const StockTable = forwardRef<
 
   return (
     <div className="relative">
-      <div id="grid-status" role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        Showing {stocks.length} of 5,000 stocks.
+      <div id="grid-status" className="sr-only">
+        Showing {stocks.length.toLocaleString()} of {totalCount.toLocaleString()} stocks. Use arrow
+        keys to navigate, Enter to open a chart, Space to toggle watchlist, and ? for keyboard help.
       </div>
       <div
         id="stock-grid"
         ref={parentRef}
         role="grid"
         aria-label="Real-time Stock Screener Grid"
+        aria-describedby="grid-status"
         aria-rowcount={rows.length + 1}
         aria-colcount={columns.length}
         aria-activedescendant={
-          rows[selectedIndex]
+          rows[selectedIndex] &&
+          (visibleColumns[activeColumnIndex]?.getIsPinned() === 'left' ||
+            columnVirtualizer
+              .getVirtualItems()
+              .some(
+                (item) =>
+                  scrollableColumns[item.index]?.id === visibleColumns[activeColumnIndex]?.id,
+              )) &&
+          virtualizer.getVirtualItems().some((row) => row.index === selectedIndex)
             ? `grid-cell-${rows[selectedIndex].id}-${activeColumnIndex}`
             : undefined
         }
@@ -450,6 +521,19 @@ export const StockTable = forwardRef<
       >
         <div
           role="row"
+          aria-rowindex={1}
+          onKeyDown={(event) => {
+            if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+            const header = (event.target as HTMLElement).closest<HTMLElement>(
+              '[role="columnheader"]',
+            );
+            const index = Number(header?.getAttribute('aria-colindex')) - 1;
+            const column = visibleColumns[index];
+            if (!header || !column) return;
+            event.preventDefault();
+            const bounds = header.getBoundingClientRect();
+            setColumnContextMenu({ columnId: column.id, x: bounds.left, y: bounds.bottom });
+          }}
           className="sticky top-0 z-20 h-9 border-b border-neutral-800 bg-neutral-900/95 text-xs font-semibold text-neutral-400 backdrop-blur"
           style={{ width: table.getTotalSize(), position: 'sticky' }}
         >
@@ -462,6 +546,9 @@ export const StockTable = forwardRef<
                 <div
                   key={header.id}
                   role="columnheader"
+                  aria-colindex={
+                    visibleColumns.findIndex((column) => column.id === header.column.id) + 1
+                  }
                   aria-sort={
                     sort.field === header.column.id
                       ? sort.direction === 'asc'
@@ -491,7 +578,7 @@ export const StockTable = forwardRef<
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
                     {sort.field === header.column.id && (
-                      <span className="ml-1 text-emerald-400">
+                      <span aria-hidden="true" className="ml-1 text-emerald-400">
                         {sort.direction === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
@@ -534,6 +621,9 @@ export const StockTable = forwardRef<
               <div
                 key={header.id}
                 role="columnheader"
+                aria-colindex={
+                  visibleColumns.findIndex((column) => column.id === header.column.id) + 1
+                }
                 aria-sort={
                   sort.field === header.column.id
                     ? sort.direction === 'asc'
@@ -559,7 +649,7 @@ export const StockTable = forwardRef<
                 >
                   {flexRender(header.column.columnDef.header, header.getContext())}
                   {sort.field === header.column.id && (
-                    <span className="ml-1 text-emerald-400">
+                    <span aria-hidden="true" className="ml-1 text-emerald-400">
                       {sort.direction === 'asc' ? '↑' : '↓'}
                     </span>
                   )}
@@ -603,8 +693,8 @@ export const StockTable = forwardRef<
         >
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const row = rows[virtualRow.index];
-            const isSelected =
-              selected === row.original.symbol || selectedIndex === virtualRow.index;
+            // Keyboard focus has its own cell outline; selection follows the stock across sorting.
+            const isSelected = selected === row.original.symbol;
             const rowBackground = isSelected
               ? 'bg-emerald-950'
               : virtualRow.index % 2
@@ -627,6 +717,7 @@ export const StockTable = forwardRef<
                   id={`grid-cell-${row.id}-${cellIndex}`}
                   key={cell.id}
                   role="gridcell"
+                  aria-colindex={cellIndex + 1}
                   data-active-cell={isActiveCell || undefined}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -654,7 +745,7 @@ export const StockTable = forwardRef<
                 className={`absolute left-0 h-9 [will-change:transform] border-b border-neutral-900/80 text-sm cursor-pointer hover:bg-neutral-700/50 ${rowBackground} ${isSelected ? 'border-l-2 border-l-emerald-400' : ''}`}
                 style={{
                   width: table.getTotalSize(),
-                  transform: `translateY(${virtualRow.start}px)`,
+                  transform: `translateY(${virtualRow.start - VIRTUAL_ROW_HEIGHT}px)`,
                 }}
               >
                 {pinnedColumns.map((column) => {
@@ -685,7 +776,7 @@ export const StockTable = forwardRef<
             );
           })}
         </div>
-        <div className="sticky bottom-0 z-20 flex items-center justify-between border-t border-neutral-800 bg-neutral-900 px-3 py-2 text-xs text-neutral-400">
+        <div className="sticky bottom-0 z-20 flex h-8 items-center justify-between border-t border-neutral-800 bg-neutral-900 px-3 text-xs text-neutral-400">
           <span>
             Showing <strong className="text-white">{stocks.length.toLocaleString()}</strong>{' '}
             filtered stocks
@@ -696,6 +787,15 @@ export const StockTable = forwardRef<
       {columnContextMenu && (
         <div
           role="menu"
+          ref={columnMenuRef}
+          tabIndex={-1}
+          aria-label="Column options"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' || event.key === 'Tab') {
+              event.preventDefault();
+              setColumnContextMenu(null);
+            }
+          }}
           className="fixed z-50 min-w-40 rounded-lg border border-neutral-700 bg-neutral-900 p-1 shadow-xl"
           style={{ left: columnContextMenu.x, top: columnContextMenu.y }}
         >
@@ -723,6 +823,17 @@ export const StockTable = forwardRef<
             role="dialog"
             aria-modal="true"
             aria-label="Keyboard shortcuts"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' || event.key === '?') {
+                event.preventDefault();
+                event.stopPropagation();
+                setShowHelpModal(false);
+              } else if (event.key === 'Tab') {
+                // The close button is currently the dialog's only interactive control.
+                event.preventDefault();
+                helpCloseRef.current?.focus();
+              }
+            }}
             className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
           >
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
@@ -730,6 +841,7 @@ export const StockTable = forwardRef<
               <button
                 type="button"
                 aria-label="Close keyboard shortcuts"
+                ref={helpCloseRef}
                 onClick={() => setShowHelpModal(false)}
               >
                 ✕

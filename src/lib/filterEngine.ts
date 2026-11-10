@@ -35,35 +35,55 @@ function includesValue(actual: unknown, values: unknown[]) {
   return values.includes(actual);
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 /** Builds one safe predicate for every filter operator declared in `FilterOperator`. */
 export function createPredicate(filter: FilterConfig): (stock: Stock) => boolean {
+  const expected = filter.value;
   return (stock) => {
-    const actual = stock[filter.field];
+    // Proximity controls explicitly express percentage distance from the 52-week extreme.
+    const actual =
+      filter.field === 'week52HighProximity'
+        ? stock.week52High > 0
+          ? ((stock.week52High - stock.lastPrice) / stock.week52High) * 100
+          : null
+        : filter.field === 'week52LowProximity'
+          ? stock.week52Low > 0
+            ? ((stock.lastPrice - stock.week52Low) / stock.week52Low) * 100
+            : null
+          : stock[filter.field];
     if (actual === null || actual === undefined) return false;
 
-    const expected = filter.value;
     switch (filter.operator) {
       case 'eq':
         return actual === expected;
       case 'neq':
         return actual !== expected;
       case 'gt':
-        return Number(actual) > Number(expected);
+        return isFiniteNumber(actual) && isFiniteNumber(expected) && actual > expected;
       case 'gte':
-        return Number(actual) >= Number(expected);
+        return isFiniteNumber(actual) && isFiniteNumber(expected) && actual >= expected;
       case 'lt':
-        return Number(actual) < Number(expected);
+        return isFiniteNumber(actual) && isFiniteNumber(expected) && actual < expected;
       case 'lte':
-        return Number(actual) <= Number(expected);
+        return isFiniteNumber(actual) && isFiniteNumber(expected) && actual <= expected;
       case 'between': {
-        const [minimum, maximum] = expected as number[];
-        const value = Number(actual);
-        return value >= minimum && value <= maximum;
+        if (!Array.isArray(expected) || expected.length !== 2) return false;
+        const [minimum, maximum] = expected;
+        return (
+          isFiniteNumber(actual) &&
+          isFiniteNumber(minimum) &&
+          isFiniteNumber(maximum) &&
+          actual >= minimum &&
+          actual <= maximum
+        );
       }
       case 'in':
-        return includesValue(actual, expected as Array<number | string>);
+        return Array.isArray(expected) && includesValue(actual, expected);
       case 'notIn':
-        return !includesValue(actual, expected as Array<number | string>);
+        return Array.isArray(expected) && !includesValue(actual, expected);
       case 'contains': {
         if (Array.isArray(actual)) return actual.map(String).includes(String(expected));
         return String(actual).toLowerCase().includes(String(expected).toLowerCase());
@@ -127,10 +147,16 @@ export function optimiseFilterAst(node: FilterGroup | FilterConfig): FilterGroup
 }
 
 export function evaluateGroup(stock: Stock, node: FilterGroup | FilterConfig): boolean {
-  if (!isFilterGroup(node)) return createPredicate(node)(stock);
+  return compileFilterAst(node)(stock);
+}
+
+/** Build predicate closures once per execution, keeping short-circuit evaluation per stock. */
+function compileFilterAst(node: FilterGroup | FilterConfig): (stock: Stock) => boolean {
+  if (!isFilterGroup(node)) return createPredicate(node);
+  const predicates = node.children.map(compileFilterAst);
   return node.type === 'AND'
-    ? node.children.every((child) => evaluateGroup(stock, child))
-    : node.children.some((child) => evaluateGroup(stock, child));
+    ? (stock) => predicates.every((predicate) => predicate(stock))
+    : (stock) => predicates.some((predicate) => predicate(stock));
 }
 
 export function filterStocksWithMetrics(
@@ -139,9 +165,17 @@ export function filterStocksWithMetrics(
 ): FilterExecutionResult {
   const start = performance.now();
   const ast = optimiseFilterAst(buildFilterAst(filters)) as FilterGroup;
-  const data =
-    ast.children.length === 0 ? stocks : stocks.filter((stock) => evaluateGroup(stock, ast));
-  return { data, executionTimeMs: performance.now() - start };
+  const predicate = compileFilterAst(ast);
+  const data = ast.children.length === 0 ? stocks : stocks.filter(predicate);
+  const executionTimeMs = performance.now() - start;
+  if (process.env.NODE_ENV === 'development') {
+    console.debug('[filterEngine]', {
+      records: stocks.length,
+      matches: data.length,
+      executionTimeMs,
+    });
+  }
+  return { data, executionTimeMs };
 }
 
 export function filterStocks(stocks: Stock[], filters: FilterConfig[]): Stock[] {
@@ -154,6 +188,7 @@ export function executeFilterPipeline(
   filters: FilterConfig[],
   options: FilterPipelineOptions = {},
 ): FilterPipelineResult {
+  const start = performance.now();
   const filtered = filterStocksWithMetrics(stocks, filters);
   const { sortConfig, page, pageSize } = options;
   const sorted =
@@ -162,12 +197,12 @@ export function executeFilterPipeline(
       : filtered.data;
   const data =
     page !== undefined && pageSize !== undefined ? paginateStocks(sorted, page, pageSize) : sorted;
-  return { data, total: sorted.length, executionTimeMs: filtered.executionTimeMs };
+  return { data, total: sorted.length, executionTimeMs: performance.now() - start };
 }
 
 export function filterStocksByAst(stocks: Stock[], root: FilterGroup) {
   const optimisedRoot = optimiseFilterAst(root) as FilterGroup;
-  return stocks.filter((stock) => evaluateGroup(stock, optimisedRoot));
+  return stocks.filter(compileFilterAst(optimisedRoot));
 }
 
 /** Explicit index tie-breaker keeps output stable even in runtimes without stable native sort. */
@@ -180,6 +215,18 @@ export function sortStocks(
   return stocks
     .map((stock, index) => ({ stock, index }))
     .sort((first, second) => {
+      const firstActual = first.stock[field];
+      const secondActual = second.stock[field];
+      const firstMissing =
+        firstActual == null || (typeof firstActual === 'number' && !Number.isFinite(firstActual));
+      const secondMissing =
+        secondActual == null ||
+        (typeof secondActual === 'number' && !Number.isFinite(secondActual));
+      // Missing financial values stay last in either direction, with stable ties.
+      if (firstMissing || secondMissing) {
+        if (firstMissing && secondMissing) return first.index - second.index;
+        return firstMissing ? 1 : -1;
+      }
       const firstValue = toComparableValue(first.stock[field]);
       const secondValue = toComparableValue(second.stock[field]);
       if (firstValue === secondValue) return first.index - second.index;

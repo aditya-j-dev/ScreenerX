@@ -1,8 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { createChart } from 'lightweight-charts';
+import {
+  createChart,
+  type Time,
+  type ISeriesApi,
+  type LineData,
+  type WhitespaceData,
+  type LogicalRange,
+  type UTCTimestamp,
+} from 'lightweight-charts';
 import type { OHLCV } from '@/types/stock';
+import { composeChartPng, type ExportShape } from '@/lib/chartExport';
 import {
   calculateBollinger,
   calculateEMA,
@@ -10,18 +19,34 @@ import {
   calculateSMA,
   calculateVolumeProfile,
 } from '@/lib/indicators';
-import { aggregateOHLCV } from '@/lib/mockData';
+import {
+  aggregateCalendarWeeks,
+  formatIntradayTime,
+  selectTimeframe,
+  type ChartTimeframe,
+} from '@/lib/chartData';
 
-type Timeframe = '1D' | '1W' | '1M' | '3M' | '1Y' | '5Y';
+type Timeframe = ChartTimeframe;
 type DrawingTool = 'none' | 'horizontal' | 'trend' | 'rectangle';
+
+function lineData(candles: OHLCV[], values: (number | undefined)[]): (LineData | WhitespaceData)[] {
+  // Whitespace bars retain the RSI chart's logical-time alignment during warmup.
+  return candles.map((candle, index) =>
+    values[index] === undefined
+      ? { time: candle.time as UTCTimestamp }
+      : { time: candle.time as UTCTimestamp, value: values[index]! },
+  );
+}
 
 type ChartAnnotation = {
   id: string;
   tool: Exclude<DrawingTool, 'none'>;
-  startX: number;
-  startY: number;
-  endX: number;
-  endY: number;
+  symbol: string;
+  timeframe: Timeframe;
+  startTime: number;
+  startPrice: number;
+  endTime: number;
+  endPrice: number;
 };
 
 function NumberSetting({
@@ -51,7 +76,17 @@ function NumberSetting({
         step={step}
         value={value}
         onChange={(event) =>
-          onChange(Math.min(max, Math.max(min, Number(event.target.value) || min)))
+          onChange(
+            Math.min(
+              max,
+              Math.max(
+                min,
+                step === 1
+                  ? Math.round(Number(event.target.value) || min)
+                  : Number(event.target.value) || min,
+              ),
+            ),
+          )
         }
       />
     </label>
@@ -63,9 +98,19 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
   const priceWrapperRef = useRef<HTMLDivElement>(null);
   const rsiRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const candleSeriesRef = useRef<any>(null);
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const lineSeriesRef = useRef<Array<{ key: string; series: ISeriesApi<'Line'> }>>([]);
+  const lineValuesRef = useRef<Record<string, (number | undefined)[]>>({});
+  const previousDataRef = useRef<OHLCV[]>([]);
+  const savedRangeRef = useRef<{
+    symbol: string;
+    timeframe: Timeframe;
+    range: LogicalRange | null;
+  } | null>(null);
   const visibleDataRef = useRef<OHLCV[]>([]);
   const priceChartRef = useRef<ReturnType<typeof createChart> | null>(null);
+  const rsiChartRef = useRef<ReturnType<typeof createChart> | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const [timeframe, setTimeframe] = useState<Timeframe>('1Y');
   const [showSMA, setShowSMA] = useState(true);
@@ -79,44 +124,71 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
   const [bollingerPeriod, setBollingerPeriod] = useState(20);
   const [bollingerDeviations, setBollingerDeviations] = useState(2);
   const [rsiPeriod, setRsiPeriod] = useState(14);
-  const [volumeBuckets, setVolumeBuckets] = useState(16);
+  const [volumeBuckets, setVolumeBuckets] = useState(40);
+  const [viewportRange, setViewportRange] = useState<LogicalRange | null>(null);
+  const [overlayVersion, setOverlayVersion] = useState(0);
   const [drawingTool, setDrawingTool] = useState<DrawingTool>('none');
   const [annotations, setAnnotations] = useState<ChartAnnotation[]>([]);
   const [draftAnnotation, setDraftAnnotation] = useState<ChartAnnotation | null>(null);
+  const drawingAreaRef = useRef<HTMLDivElement>(null);
+  const drawingButtonRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (drawingTool !== 'none') drawingAreaRef.current?.focus({ preventScroll: true });
+    else if (document.activeElement === drawingAreaRef.current) drawingButtonRef.current?.focus();
+  }, [drawingTool]);
+  useEffect(() => {
+    setDraftAnnotation(null);
+    setDrawingTool('none');
+    setExportError(null);
+  }, [symbol, timeframe]);
 
-  const visibleData = useMemo(() => {
-    const daysMap: Record<Timeframe, number> = {
-      '1D': 1,
-      '1W': 5,
-      '1M': 21,
-      '3M': 63,
-      '1Y': 252,
-      '5Y': 1260,
+  const visibleData = useMemo(() => selectTimeframe(data, timeframe), [data, timeframe]);
+  const hasData = visibleData.length > 0;
+
+  const indicatorSource = useMemo(
+    () =>
+      timeframe === '1D' ? visibleData : timeframe === '5Y' ? aggregateCalendarWeeks(data) : data,
+    [data, timeframe, visibleData],
+  );
+  const { smaValues, emaValues, bollinger, rsiValues } = useMemo(() => {
+    const closes = indicatorSource.map((candle) => candle.close);
+    const indices = new Map(indicatorSource.map((candle, index) => [candle.time, index]));
+    const align = <T,>(values: T[]) =>
+      visibleData.map((candle) => values[indices.get(candle.time) ?? -1]);
+    return {
+      smaValues: showSMA ? smaPeriods.map((period) => align(calculateSMA(closes, period))) : [],
+      emaValues: showEMA ? emaPeriods.map((period) => align(calculateEMA(closes, period))) : [],
+      bollinger: showBollinger
+        ? align(calculateBollinger(closes, bollingerPeriod, bollingerDeviations))
+        : [],
+      rsiValues: showRSI ? align(calculateRSI(closes, rsiPeriod)) : [],
     };
-    const limit = Math.min(data.length, daysMap[timeframe] || 252);
-    const timeframeData = data.slice(-limit);
-    return timeframe === '5Y' ? aggregateOHLCV(timeframeData, 5) : timeframeData;
-  }, [data, timeframe]);
-
-  const closes = useMemo(() => visibleData.map((candle) => candle.close), [visibleData]);
-  const smaValues = useMemo(
-    () => smaPeriods.map((period) => calculateSMA(closes, period)),
-    [closes, smaPeriods],
-  );
-  const emaValues = useMemo(
-    () => emaPeriods.map((period) => calculateEMA(closes, period)),
-    [closes, emaPeriods],
-  );
-  const bollinger = useMemo(
-    () => calculateBollinger(closes, bollingerPeriod, bollingerDeviations),
-    [closes, bollingerPeriod, bollingerDeviations],
-  );
-  const rsiValues = useMemo(() => calculateRSI(closes, rsiPeriod), [closes, rsiPeriod]);
+  }, [
+    indicatorSource,
+    visibleData,
+    smaPeriods,
+    emaPeriods,
+    bollingerPeriod,
+    bollingerDeviations,
+    rsiPeriod,
+    showSMA,
+    showEMA,
+    showBollinger,
+    showRSI,
+  ]);
+  lineValuesRef.current = {
+    ...Object.fromEntries(smaValues.map((values, index) => [`sma${index}`, values])),
+    ...Object.fromEntries(emaValues.map((values, index) => [`ema${index}`, values])),
+    upper: bollinger.map((band) => band?.upper),
+    middle: bollinger.map((band) => band?.middle),
+    lower: bollinger.map((band) => band?.lower),
+    rsi: rsiValues,
+  };
   visibleDataRef.current = visibleData;
 
   useEffect(() => {
     const currentData = visibleDataRef.current;
-    if (!priceRef.current || !rsiRef.current || currentData.length === 0) return;
+    if (!priceRef.current || currentData.length === 0) return;
 
     // Main Candlestick Chart Initialization
     const chart = createChart(priceRef.current, {
@@ -124,7 +196,22 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
       layout: { textColor: '#d4d4d4', background: { color: '#000000' } },
       grid: { vertLines: { color: '#173020' }, horzLines: { color: '#173020' } },
       rightPriceScale: { borderColor: '#254c31' },
-      timeScale: { borderColor: '#254c31' },
+      timeScale: {
+        borderColor: '#254c31',
+        timeVisible: timeframe === '1D',
+        secondsVisible: false,
+        tickMarkFormatter:
+          timeframe === '1D'
+            ? (time: Time) => (typeof time === 'number' ? formatIntradayTime(time) : null)
+            : undefined,
+      },
+      localization:
+        timeframe === '1D'
+          ? {
+              timeFormatter: (time: Time) =>
+                typeof time === 'number' ? `${formatIntradayTime(time)} IST` : String(time),
+            }
+          : {},
       handleScroll: {
         mouseWheel: true,
         pressedMouseMove: true,
@@ -146,112 +233,56 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
       wickUpColor: '#10b981',
       wickDownColor: '#ef4444',
     });
-    candles.setData(currentData as any);
+    candles.setData(
+      currentData.map((candle) => ({ ...candle, time: candle.time as UTCTimestamp })),
+    );
     candleSeriesRef.current = candles;
+    previousDataRef.current = currentData;
 
-    // Render all required simple-moving-average overlays.
-    if (showSMA) {
-      const smaColors = ['#34d399', '#22c55e', '#f97316'];
-      smaPeriods.forEach((period, seriesIndex) => {
-        const series = chart.addLineSeries({
-          color: smaColors[seriesIndex] ?? '#e2e8f0',
-          lineWidth: 2,
-          title: `SMA ${period}`,
-        });
-        series.setData(
-          currentData
-            .map((candle, index) =>
-              smaValues[seriesIndex]?.[index] !== undefined
-                ? { time: candle.time, value: smaValues[seriesIndex]![index]! }
-                : null,
-            )
-            .filter(Boolean) as any,
-        );
-      });
-    }
-
-    // Render both EMA overlays; the values are configurable in the settings panel.
-    if (showEMA) {
-      const emaColors = ['#a78bfa', '#ec4899'];
-      emaPeriods.forEach((period, seriesIndex) => {
-        const series = chart.addLineSeries({
-          color: emaColors[seriesIndex] ?? '#e2e8f0',
-          lineWidth: 2,
-          title: `EMA ${period}`,
-        });
-        series.setData(
-          currentData
-            .map((candle, index) =>
-              emaValues[seriesIndex]?.[index] !== undefined
-                ? { time: candle.time, value: emaValues[seriesIndex]![index]! }
-                : null,
-            )
-            .filter(Boolean) as any,
-        );
-      });
-    }
-
-    // Bollinger Band: translucent area plus upper, middle, and lower reference lines.
+    lineSeriesRef.current = [];
+    const addIndicator = (key: string, color: string, title: string) => {
+      const series = chart.addLineSeries({ color, lineWidth: 2, title });
+      series.setData(lineData(currentData, lineValuesRef.current[key]));
+      lineSeriesRef.current.push({ key, series });
+    };
+    if (showSMA)
+      smaPeriods.forEach((period, index) =>
+        addIndicator(
+          `sma${index}`,
+          ['#34d399', '#22c55e', '#f97316'][index] ?? '#e2e8f0',
+          `SMA ${period}`,
+        ),
+      );
+    if (showEMA)
+      emaPeriods.forEach((period, index) =>
+        addIndicator(`ema${index}`, ['#a78bfa', '#ec4899'][index] ?? '#e2e8f0', `EMA ${period}`),
+      );
     if (showBollinger) {
-      const bandArea = chart.addAreaSeries({
-        lineColor: 'rgba(245, 158, 11, 0)',
-        topColor: 'rgba(245, 158, 11, 0.14)',
-        bottomColor: 'rgba(245, 158, 11, 0.02)',
-        title: 'Bollinger Band',
-      });
-      const upper = chart.addLineSeries({ color: '#f59e0b', lineWidth: 1, title: 'BB Upper' });
-      const middle = chart.addLineSeries({
-        color: '#fbbf24',
-        lineWidth: 1,
-        lineStyle: 2,
-        title: 'BB Middle',
-      });
-      const lower = chart.addLineSeries({ color: '#f59e0b', lineWidth: 1, title: 'BB Lower' });
-      const bandData = currentData
-        .map((candle, index) =>
-          bollinger[index] ? { time: candle.time, value: bollinger[index]!.upper } : null,
-        )
-        .filter(Boolean) as any;
-      bandArea.setData(bandData);
-      upper.setData(bandData);
-      middle.setData(
-        currentData
-          .map((candle, index) =>
-            bollinger[index] ? { time: candle.time, value: bollinger[index]!.middle } : null,
-          )
-          .filter(Boolean) as any,
-      );
-      lower.setData(
-        currentData
-          .map((candle, index) =>
-            bollinger[index] ? { time: candle.time, value: bollinger[index]!.lower } : null,
-          )
-          .filter(Boolean) as any,
-      );
+      addIndicator('upper', '#f59e0b', 'BB Upper');
+      addIndicator('middle', '#fbbf24', 'BB Middle');
+      addIndicator('lower', '#f59e0b', 'BB Lower');
     }
-
     // RSI Sub-chart
-    const rsiChart = createChart(rsiRef.current, {
-      height: 120,
-      layout: { textColor: '#a3a3a3', background: { color: '#000000' } },
-      grid: { vertLines: { color: '#173020' }, horzLines: { color: '#173020' } },
-      rightPriceScale: { borderColor: '#254c31' },
-      timeScale: { visible: false },
-    });
+    const rsiChart =
+      showRSI && rsiRef.current
+        ? createChart(rsiRef.current, {
+            height: 120,
+            layout: { textColor: '#a3a3a3', background: { color: '#000000' } },
+            grid: { vertLines: { color: '#173020' }, horzLines: { color: '#173020' } },
+            rightPriceScale: { borderColor: '#254c31' },
+            timeScale: { visible: false },
+          })
+        : null;
+    rsiChartRef.current = rsiChart;
 
-    if (showRSI) {
+    if (rsiChart) {
       const rsiSeries = rsiChart.addLineSeries({
         color: '#fb7185',
         lineWidth: 2,
         title: `RSI ${rsiPeriod}`,
       });
-      rsiSeries.setData(
-        currentData
-          .map((candle, index) =>
-            rsiValues[index] !== undefined ? { time: candle.time, value: rsiValues[index]! } : null,
-          )
-          .filter(Boolean) as any,
-      );
+      rsiSeries.setData(lineData(currentData, lineValuesRef.current.rsi));
+      lineSeriesRef.current.push({ key: 'rsi', series: rsiSeries });
       rsiSeries.createPriceLine({
         price: 70,
         color: '#ef4444',
@@ -270,19 +301,42 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
       });
     }
 
-    chart.timeScale().fitContent();
-    rsiChart.timeScale().fitContent();
+    const saved = savedRangeRef.current;
+    if (saved?.symbol === symbol && saved.timeframe === timeframe && saved.range) {
+      chart.timeScale().setVisibleLogicalRange(saved.range);
+      rsiChart?.timeScale().setVisibleLogicalRange(saved.range);
+    } else {
+      chart.timeScale().fitContent();
+      rsiChart?.timeScale().fitContent();
+    }
+    let syncingRange = false;
+    const updateRange = (range: LogicalRange | null, fromRsi = false) => {
+      if (syncingRange) return;
+      setViewportRange(range);
+      setOverlayVersion((value) => value + 1);
+      if (!range) return;
+      syncingRange = true;
+      if (fromRsi) chart.timeScale().setVisibleLogicalRange(range);
+      else rsiChart?.timeScale().setVisibleLogicalRange(range);
+      syncingRange = false;
+    };
+    const priceRangeChanged = (range: LogicalRange | null) => updateRange(range);
+    const rsiRangeChanged = (range: LogicalRange | null) => updateRange(range, true);
+    chart.timeScale().subscribeVisibleLogicalRangeChange(priceRangeChanged);
+    rsiChart?.timeScale().subscribeVisibleLogicalRangeChange(rsiRangeChanged);
+    updateRange(chart.timeScale().getVisibleLogicalRange());
 
     const resetTimeScale = () => {
       chart.timeScale().fitContent();
-      rsiChart.timeScale().fitContent();
+      rsiChart?.timeScale().fitContent();
     };
     const chartContainer = priceWrapperRef.current;
     chartContainer?.addEventListener('dblclick', resetTimeScale);
 
     const handleResize = (width = priceRef.current?.clientWidth || 600) => {
       chart.applyOptions({ width });
-      rsiChart.applyOptions({ width });
+      rsiChart?.applyOptions({ width });
+      setOverlayVersion((value) => value + 1);
     };
     const resizeObserver = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width;
@@ -294,29 +348,38 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
     chart.subscribeCrosshairMove((event) => {
       const tooltip = tooltipRef.current;
       const priceWrapper = priceWrapperRef.current;
-      const candle = event.seriesData.get(candles) as
-        { open: number; high: number; low: number; close: number; volume?: number } | undefined;
+      const candle = visibleDataRef.current.find((point) => point.time === event.time);
       if (!tooltip || !priceWrapper || !event.point || !candle) {
         if (tooltip) tooltip.style.opacity = '0';
         return;
       }
 
-      tooltip.textContent = `O ${candle.open.toFixed(2)}  H ${candle.high.toFixed(2)}  L ${candle.low.toFixed(2)}  C ${candle.close.toFixed(2)}  V ${candle.volume?.toLocaleString?.() ?? '—'}`;
+      tooltip.textContent = `O ${candle.open.toFixed(2)}  H ${candle.high.toFixed(2)}  L ${candle.low.toFixed(2)}  C ${candle.close.toFixed(2)}  V ${candle.volume.toLocaleString('en-IN')}`;
       tooltip.style.opacity = '1';
-      tooltip.style.left = `${Math.min(Math.max(event.point.x + 12, 8), priceWrapper.clientWidth - tooltip.offsetWidth - 8)}px`;
+      tooltip.style.left = `${Math.max(8, Math.min(event.point.x + 12, priceWrapper.clientWidth - tooltip.offsetWidth - 8))}px`;
       tooltip.style.top = `${Math.min(Math.max(event.point.y + 12, 8), 280)}px`;
     });
 
     return () => {
+      savedRangeRef.current = {
+        symbol,
+        timeframe,
+        range: chart.timeScale().getVisibleLogicalRange(),
+      };
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(priceRangeChanged);
+      rsiChart?.timeScale().unsubscribeVisibleLogicalRangeChange(rsiRangeChanged);
       resizeObserver.disconnect();
       chartContainer?.removeEventListener('dblclick', resetTimeScale);
       candleSeriesRef.current = null;
       priceChartRef.current = null;
+      rsiChartRef.current = null;
+      lineSeriesRef.current = [];
       chart.remove();
-      rsiChart.remove();
+      rsiChart?.remove();
     };
   }, [
     symbol,
+    hasData,
     timeframe,
     smaPeriods,
     emaPeriods,
@@ -329,121 +392,264 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
     showRSI,
   ]);
 
-  // Incoming ticks replace only the current candle. Recreating the chart here would reset a user's pan/zoom.
+  // Update existing instances; replacing a synthetic intraday path can also change earlier candles.
   useEffect(() => {
     const latestCandle = visibleData[visibleData.length - 1];
     const chart = priceChartRef.current;
+    if (!chart || !latestCandle) return;
     const logicalRange = chart?.timeScale().getVisibleLogicalRange();
-    if (latestCandle) candleSeriesRef.current?.update(latestCandle as any);
-    if (chart && logicalRange) chart.timeScale().setVisibleLogicalRange(logicalRange);
-  }, [visibleData]);
+    const previous = previousDataRef.current;
+    const latestOnly =
+      previous.length === visibleData.length &&
+      previous[previous.length - 1]?.time === latestCandle.time &&
+      visibleData.slice(0, -1).every((candle, index) => {
+        const old = previous[index];
+        return (
+          old?.time === candle.time &&
+          old.open === candle.open &&
+          old.high === candle.high &&
+          old.low === candle.low &&
+          old.close === candle.close &&
+          old.volume === candle.volume
+        );
+      });
+    if (latestOnly)
+      candleSeriesRef.current?.update({ ...latestCandle, time: latestCandle.time as UTCTimestamp });
+    else
+      candleSeriesRef.current?.setData(
+        visibleData.map((candle) => ({ ...candle, time: candle.time as UTCTimestamp })),
+      );
+    for (const { key, series } of lineSeriesRef.current) {
+      const values = lineValuesRef.current[key];
+      const latest = values[visibleData.length - 1];
+      if (latestOnly && latest !== undefined)
+        series.update({ time: latestCandle.time as UTCTimestamp, value: latest });
+      else series.setData(lineData(visibleData, values));
+    }
+    previousDataRef.current = visibleData;
+    if (logicalRange) chart.timeScale().setVisibleLogicalRange(logicalRange);
+    setOverlayVersion((value) => value + 1);
+  }, [visibleData, smaValues, emaValues, bollinger, rsiValues]);
 
-  const profile = useMemo(
-    () => calculateVolumeProfile(visibleData, volumeBuckets),
-    [visibleData, volumeBuckets],
-  );
+  const profile = useMemo(() => {
+    if (!showVolumeProfile) return [];
+    const first = viewportRange ? Math.max(0, Math.floor(viewportRange.from)) : 0;
+    const end = viewportRange
+      ? Math.max(0, Math.min(visibleData.length, Math.ceil(viewportRange.to) + 1))
+      : visibleData.length;
+    return calculateVolumeProfile(visibleData.slice(first, end), volumeBuckets);
+  }, [visibleData, volumeBuckets, viewportRange, showVolumeProfile]);
   const maxVol = useMemo(() => Math.max(...profile.map((x) => x.volume), 1), [profile]);
+  const bandPolygon = useMemo(() => {
+    void overlayVersion;
+    const chart = priceChartRef.current;
+    const series = candleSeriesRef.current;
+    if (!chart || !series || !showBollinger) return '';
+    const upper: string[] = [],
+      lower: string[] = [];
+    visibleData.forEach((candle, index) => {
+      const band = bollinger[index];
+      if (!band) return;
+      const x = chart.timeScale().timeToCoordinate(candle.time as UTCTimestamp);
+      const top = series.priceToCoordinate(band.upper),
+        bottom = series.priceToCoordinate(band.lower);
+      if (x !== null && top !== null && bottom !== null) {
+        upper.push(`${x},${top}`);
+        lower.push(`${x},${bottom}`);
+      }
+    });
+    return [...upper, ...lower.reverse()].join(' ');
+  }, [visibleData, bollinger, showBollinger, overlayVersion]);
+
+  const currentAnnotations = annotations.filter(
+    (annotation) => annotation.symbol === symbol && annotation.timeframe === timeframe,
+  );
+  const projectAnnotation = (annotation: ChartAnnotation): ExportShape | null => {
+    const chart = priceChartRef.current,
+      series = candleSeriesRef.current;
+    if (!chart || !series) return null;
+    const x1 =
+      annotation.tool === 'horizontal'
+        ? 0
+        : chart.timeScale().timeToCoordinate(annotation.startTime as UTCTimestamp);
+    const x2 =
+      annotation.tool === 'horizontal'
+        ? chart.timeScale().width()
+        : chart.timeScale().timeToCoordinate(annotation.endTime as UTCTimestamp);
+    const y1 = series.priceToCoordinate(annotation.startPrice),
+      y2 = series.priceToCoordinate(annotation.endPrice);
+    if (x1 === null || x2 === null || y1 === null || y2 === null) return null;
+    return {
+      kind: annotation.tool === 'rectangle' ? 'rectangle' : 'line',
+      x1,
+      y1,
+      x2,
+      y2,
+      color:
+        annotation.tool === 'horizontal'
+          ? '#fbbf24'
+          : annotation.tool === 'trend'
+            ? '#22c55e'
+            : '#a78bfa',
+    };
+  };
 
   const downloadChartAsImage = () => {
-    const canvas = priceRef.current?.querySelector('canvas');
-    if (canvas) {
-      const image = canvas.toDataURL('image/png');
+    setExportError(null);
+    try {
+      const chart = priceChartRef.current;
+      if (!chart) throw new Error('Chart is not ready');
+      const main = chart.takeScreenshot();
+      const width = priceRef.current?.clientWidth || main.width / (window.devicePixelRatio || 1);
+      const image = composeChartPng({
+        main,
+        rsi: showRSI ? rsiChartRef.current?.takeScreenshot() : undefined,
+        cssWidth: width,
+        title: `${symbol} - ${timeframe}`,
+        subtitle: [
+          showSMA && `SMA ${smaPeriods.join('/')}`,
+          showEMA && `EMA ${emaPeriods.join('/')}`,
+          showBollinger && 'Bollinger',
+          showRSI && `RSI ${rsiPeriod}`,
+          showVolumeProfile && 'Volume Profile',
+        ]
+          .filter(Boolean)
+          .join(' | '),
+        band: bandPolygon
+          ? bandPolygon.split(' ').map((point) => {
+              const [x, y] = point.split(',').map(Number);
+              return { x, y };
+            })
+          : [],
+        profile: showVolumeProfile
+          ? profile.flatMap((point) => {
+              const y = candleSeriesRef.current?.priceToCoordinate(point.price);
+              return y === null || y === undefined || y < 0 || y > 320
+                ? []
+                : [{ y, width: (point.volume / maxVol) * 86 }];
+            })
+          : [],
+        shapes: currentAnnotations
+          .map(projectAnnotation)
+          .filter((shape): shape is ExportShape => shape !== null),
+      });
       const link = document.createElement('a');
-      link.href = image;
-      link.download = `stock-chart-${timeframe}.png`;
+      link.href = image.toDataURL('image/png');
+      link.download = `${symbol.replace(/[^a-zA-Z0-9._-]/g, '_')}-${timeframe}.png`;
       link.click();
-    } else {
-      alert('Chart PNG Export: Capture completed.');
+    } catch {
+      setExportError('Unable to export the chart. Wait for it to load and try again.');
     }
   };
 
   const pointFromEvent = (event: PointerEvent<HTMLDivElement>) => {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    return {
-      x: Math.min(100, Math.max(0, ((event.clientX - bounds.left) / bounds.width) * 100)),
-      y: Math.min(100, Math.max(0, ((event.clientY - bounds.top) / bounds.height) * 100)),
-    };
+    const chart = priceChartRef.current,
+      series = candleSeriesRef.current;
+    if (!chart || !series || !priceRef.current) return null;
+    const bounds = priceRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(chart.timeScale().width(), event.clientX - bounds.left));
+    const y = Math.max(0, Math.min(320, event.clientY - bounds.top));
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const time = chart.timeScale().coordinateToTime(x),
+      price = series.coordinateToPrice(y);
+    return typeof time === 'number' && price !== null && Number.isFinite(price)
+      ? { time, price }
+      : null;
   };
-
   const startDrawing = (event: PointerEvent<HTMLDivElement>) => {
-    if (drawingTool === 'none') return;
+    if (drawingTool === 'none' || event.button > 0) return;
     const point = pointFromEvent(event);
+    if (!point) return;
+    event.currentTarget.focus({ preventScroll: true });
     event.currentTarget.setPointerCapture(event.pointerId);
     setDraftAnnotation({
       id: `${Date.now()}-${Math.random()}`,
       tool: drawingTool,
-      startX: drawingTool === 'horizontal' ? 0 : point.x,
-      startY: point.y,
-      endX: drawingTool === 'horizontal' ? 100 : point.x,
-      endY: point.y,
+      symbol,
+      timeframe,
+      startTime: point.time,
+      endTime: point.time,
+      startPrice: point.price,
+      endPrice: point.price,
     });
   };
-
   const updateDrawing = (event: PointerEvent<HTMLDivElement>) => {
     if (!draftAnnotation) return;
     const point = pointFromEvent(event);
-    setDraftAnnotation(
-      (annotation) =>
-        annotation && {
-          ...annotation,
-          endX: annotation.tool === 'horizontal' ? 100 : point.x,
-          endY: annotation.tool === 'horizontal' ? annotation.startY : point.y,
-        },
-    );
+    if (point)
+      setDraftAnnotation(
+        (annotation) =>
+          annotation && {
+            ...annotation,
+            endTime: point.time,
+            endPrice: annotation.tool === 'horizontal' ? annotation.startPrice : point.price,
+          },
+      );
   };
-
   const finishDrawing = (event: PointerEvent<HTMLDivElement>) => {
     if (!draftAnnotation) return;
     const point = pointFromEvent(event);
-    event.currentTarget.releasePointerCapture(event.pointerId);
-    setAnnotations((current) => [
-      ...current,
-      {
-        ...draftAnnotation,
-        endX: draftAnnotation.tool === 'horizontal' ? 100 : point.x,
-        endY: draftAnnotation.tool === 'horizontal' ? draftAnnotation.startY : point.y,
-      },
-    ]);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    if (point)
+      setAnnotations((current) => [
+        ...current,
+        {
+          ...draftAnnotation,
+          endTime: point.time,
+          endPrice:
+            draftAnnotation.tool === 'horizontal' ? draftAnnotation.startPrice : point.price,
+        },
+      ]);
     setDraftAnnotation(null);
+    setDrawingTool('none');
   };
-
+  const cancelDrawing = () => {
+    setDraftAnnotation(null);
+    setDrawingTool('none');
+  };
   const renderAnnotation = (annotation: ChartAnnotation) => {
-    const color =
-      annotation.tool === 'horizontal'
-        ? '#fbbf24'
-        : annotation.tool === 'trend'
-          ? '#22c55e'
-          : '#a78bfa';
-    if (annotation.tool === 'rectangle') {
-      return (
-        <rect
-          key={annotation.id}
-          x={Math.min(annotation.startX, annotation.endX)}
-          y={Math.min(annotation.startY, annotation.endY)}
-          width={Math.abs(annotation.endX - annotation.startX)}
-          height={Math.abs(annotation.endY - annotation.startY)}
-          fill="rgba(167, 139, 250, 0.14)"
-          stroke={color}
-          strokeWidth="0.6"
-        />
-      );
-    }
-    return (
+    const shape = projectAnnotation(annotation);
+    if (!shape) return null;
+    const shared = {
+      'data-start-time': annotation.startTime,
+      'data-start-price': annotation.startPrice,
+      stroke: shape.color,
+      strokeWidth: 2,
+    };
+    return shape.kind === 'rectangle' ? (
+      <rect
+        key={annotation.id}
+        {...shared}
+        x={Math.min(shape.x1, shape.x2)}
+        y={Math.min(shape.y1, shape.y2)}
+        width={Math.abs(shape.x2 - shape.x1)}
+        height={Math.abs(shape.y2 - shape.y1)}
+        fill="rgba(167,139,250,0.14)"
+      />
+    ) : (
       <line
         key={annotation.id}
-        x1={annotation.startX}
-        y1={annotation.startY}
-        x2={annotation.endX}
-        y2={annotation.endY}
-        stroke={color}
-        strokeWidth="0.7"
-        strokeDasharray={annotation.tool === 'horizontal' ? '2 1' : undefined}
+        {...shared}
+        x1={shape.x1}
+        y1={shape.y1}
+        x2={shape.x2}
+        y2={shape.y2}
+        strokeDasharray={annotation.tool === 'horizontal' ? '4 2' : undefined}
       />
     );
   };
-
   return (
     <div className="space-y-3">
+      <p className="sr-only" role="note" aria-label="Chart summary">
+        {symbol}, {timeframe} candlestick chart, {visibleData.length} candles.
+        {hasData
+          ? (() => {
+              const latest = visibleData[visibleData.length - 1];
+              return ` Latest candle: open ${latest.open.toFixed(2)}, high ${latest.high.toFixed(2)}, low ${latest.low.toFixed(2)}, close ${latest.close.toFixed(2)}, volume ${latest.volume.toLocaleString('en-IN')}.`;
+            })()
+          : ' No chart data available.'}
+      </p>
       {/* Timeframe & Controls Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 pb-2 text-xs">
         {/* Timeframe Buttons */}
@@ -452,10 +658,11 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
             <button
               key={tf}
               type="button"
+              aria-pressed={timeframe === tf}
               onClick={() => setTimeframe(tf)}
               className={`rounded px-2.5 py-1 text-xs font-semibold transition-all ${
                 timeframe === tf
-                  ? 'bg-emerald-600 text-white shadow-md'
+                  ? 'bg-emerald-700 text-white shadow-md'
                   : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
               }`}
             >
@@ -468,6 +675,7 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
         <button
           type="button"
           onClick={downloadChartAsImage}
+          disabled={!hasData}
           className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1 text-xs font-medium text-neutral-200 hover:bg-neutral-700 hover:text-white transition-colors"
         >
           <span>📷</span> Export PNG
@@ -481,6 +689,20 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
           Settings
         </button>
       </div>
+
+      {exportError && (
+        <p role="alert" className="text-xs text-red-400">
+          {exportError}
+        </p>
+      )}
+      <p className="text-[11px] text-neutral-400">
+        {timeframe === '1D'
+          ? 'Simulated 5-minute candles (09:15-15:30 IST).'
+          : timeframe === '5Y'
+            ? 'Weekly candles from 1,260 simulated weekday sessions.'
+            : 'Daily candles; 1W / 1M / 3M / 1Y use 5 / 21 / 63 / 252 weekday sessions.'}{' '}
+        Exchange holidays are not modeled.
+      </p>
 
       {/* Indicator Toggles */}
       <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-300 bg-black/60 p-2 rounded-lg border border-neutral-800/80">
@@ -583,8 +805,8 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
             <NumberSetting
               label="Profile buckets"
               value={volumeBuckets}
-              min={4}
-              max={40}
+              min={30}
+              max={50}
               onChange={setVolumeBuckets}
             />
           </div>
@@ -604,7 +826,10 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
             key={tool}
             type="button"
             aria-pressed={drawingTool === tool}
-            onClick={() => setDrawingTool((current) => (current === tool ? 'none' : tool))}
+            onClick={(event) => {
+              drawingButtonRef.current = event.currentTarget;
+              setDrawingTool((current) => (current === tool ? 'none' : tool));
+            }}
             className={`rounded border px-2 py-1 transition-colors ${drawingTool === tool ? 'border-emerald-400 bg-emerald-400/15 text-emerald-300' : 'border-neutral-700 text-neutral-300 hover:border-neutral-500'}`}
           >
             {label}
@@ -612,53 +837,134 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
         ))}
         <button
           type="button"
-          onClick={() => setAnnotations([])}
-          disabled={annotations.length === 0}
+          onClick={() =>
+            setAnnotations((current) =>
+              current.filter(
+                (annotation) => annotation.symbol !== symbol || annotation.timeframe !== timeframe,
+              ),
+            )
+          }
+          disabled={currentAnnotations.length === 0}
           className="ml-auto rounded px-2 py-1 text-neutral-400 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Clear drawings
         </button>
       </div>
 
+      {drawingTool !== 'none' && (
+        <p id="drawing-keyboard-help" className="text-xs text-neutral-300">
+          Press Enter to start at the middle candle, arrows to adjust the endpoint, Enter to save,
+          or Escape to cancel.
+        </p>
+      )}
+
       {/* Main Chart and cursor-driven OHLCV tooltip */}
       <div
         ref={priceWrapperRef}
+        onPointerMove={(event) => {
+          if (event.buttons) setOverlayVersion((value) => value + 1);
+        }}
+        onPointerUp={() => setOverlayVersion((value) => value + 1)}
+        onWheel={() => setOverlayVersion((value) => value + 1)}
         className="relative w-full overflow-hidden rounded-xl border border-neutral-800"
       >
-        <div ref={priceRef} className="w-full" />
+        <div ref={priceRef} aria-hidden="true" className="w-full" />
+        {showBollinger && bandPolygon && (
+          <svg
+            className="pointer-events-none absolute inset-0 z-[5] h-full w-full overflow-hidden"
+            aria-hidden="true"
+          >
+            <polygon points={bandPolygon} fill="rgba(245, 158, 11, 0.14)" />
+          </svg>
+        )}
         {showVolumeProfile && (
-          <div className="pointer-events-none absolute inset-y-2 right-2 z-10 flex w-24 flex-col justify-between border-l border-neutral-700/70 bg-black/65 px-1.5 py-1">
-            <span className="text-center text-[9px] font-semibold text-neutral-400">
+          <div
+            aria-label="Volume profile"
+            data-profile-volume={profile.reduce((total, point) => total + point.volume, 0)}
+            className="pointer-events-none absolute inset-y-0 right-2 z-10 w-24 overflow-hidden border-l border-neutral-700/70"
+          >
+            <span className="absolute right-0 top-1 bg-black/75 text-[9px] font-semibold text-neutral-400">
               VOL PROFILE
             </span>
-            <div className="flex flex-1 flex-col justify-between py-1">
-              {profile.map((point) => (
-                <div key={point.price} className="flex items-center justify-end gap-1">
-                  <span className="w-8 text-right font-mono text-[8px] text-neutral-400">
-                    {point.price.toFixed(0)}
-                  </span>
-                  <span
-                    className="h-1.5 rounded-l bg-emerald-400/60"
-                    style={{ width: `${Math.max(3, (point.volume / maxVol) * 58)}px` }}
-                  />
-                </div>
-              ))}
-            </div>
+            {profile.map((point) => {
+              const y = candleSeriesRef.current?.priceToCoordinate(point.price);
+              if (y === null || y === undefined || y < 0 || y > 320) return null;
+              return (
+                <span
+                  key={point.price}
+                  title={`${point.price.toFixed(2)}: ${point.volume.toFixed(0)} volume`}
+                  className="absolute right-0 h-1 rounded-l bg-emerald-400/60"
+                  style={{ top: y - 2, width: `${(point.volume / maxVol) * 86}px` }}
+                />
+              );
+            })}
           </div>
-        )}
+        )}{' '}
         <div
+          ref={drawingAreaRef}
           className={`absolute inset-0 z-[15] ${drawingTool === 'none' ? 'pointer-events-none' : 'cursor-crosshair'}`}
           onPointerDown={startDrawing}
           onPointerMove={updateDrawing}
           onPointerUp={finishDrawing}
+          onPointerCancel={cancelDrawing}
+          tabIndex={drawingTool === 'none' ? -1 : 0}
+          aria-label="Chart drawing area"
+          role="group"
+          aria-describedby={drawingTool !== 'none' ? 'drawing-keyboard-help' : undefined}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              cancelDrawing();
+            }
+            if (drawingTool === 'none' || !hasData) return;
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              if (draftAnnotation) {
+                setAnnotations((current) => [...current, draftAnnotation]);
+                cancelDrawing();
+              } else {
+                const candle = visibleData[Math.floor(visibleData.length / 2)];
+                setDraftAnnotation({
+                  id: `${Date.now()}-${Math.random()}`,
+                  tool: drawingTool,
+                  symbol,
+                  timeframe,
+                  startTime: candle.time,
+                  endTime: candle.time,
+                  startPrice: candle.close,
+                  endPrice: candle.close,
+                });
+              }
+            }
+            if (event.key.startsWith('Arrow') && draftAnnotation) {
+              event.preventDefault();
+              const index = visibleData.findIndex(
+                (candle) => candle.time === draftAnnotation.endTime,
+              );
+              const nextIndex = Math.max(
+                0,
+                Math.min(
+                  visibleData.length - 1,
+                  index + (event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0),
+                ),
+              );
+              const step = Math.max(0.01, draftAnnotation.startPrice * 0.005);
+              const price = Math.max(
+                0.01,
+                draftAnnotation.endPrice +
+                  (event.key === 'ArrowUp' ? step : event.key === 'ArrowDown' ? -step : 0),
+              );
+              setDraftAnnotation({
+                ...draftAnnotation,
+                endTime: visibleData[nextIndex].time,
+                startPrice: drawingTool === 'horizontal' ? price : draftAnnotation.startPrice,
+                endPrice: price,
+              });
+            }
+          }}
         >
-          <svg
-            className="h-full w-full"
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            aria-label="Chart drawing annotations"
-          >
-            {annotations.map(renderAnnotation)}
+          <svg className="h-full w-full" aria-label="Chart drawing annotations">
+            {currentAnnotations.map(renderAnnotation)}
             {draftAnnotation && renderAnnotation({ ...draftAnnotation, id: 'drawing-preview' })}
           </svg>
         </div>
@@ -677,6 +983,7 @@ export function StockChart({ symbol, data }: { symbol: string; data: OHLCV[] }) 
           </div>
           <div
             ref={rsiRef}
+            aria-hidden="true"
             className="w-full rounded-xl overflow-hidden border border-neutral-800"
           />
         </div>

@@ -1,0 +1,57 @@
+{
+  "recordedAt": "2026-11-10T05:32:44.178Z",
+  "node": "v22.14.0",
+  "cpu": "12th Gen Intel(R) Core(TM) i5-1240P",
+  "environment": "Node.js local unthrottled; 20 warmups then 100 samples; no React/render cost",
+  "records": 5000,
+  "measurements": [
+    {
+      "name": "five broad filters",
+      "resultCount": 5000,
+      "samples": 100,
+      "medianMs": 0.6444000000000187,
+      "p95Ms": 1.7789999999999964,
+      "maxMs": 2.311800000000062
+    },
+    {
+      "name": "five selective filters",
+      "resultCount": 112,
+      "samples": 100,
+      "medianMs": 0.3690000000000282,
+      "p95Ms": 0.9824999999999591,
+      "maxMs": 1.626800000000003
+    },
+    {
+      "name": "sort marketCap ascending",
+      "resultCount": 5000,
+      "samples": 100,
+      "medianMs": 1.2171000000000731,
+      "p95Ms": 3.1072999999998956,
+      "maxMs": 3.8283000000001266
+    },
+    {
+      "name": "sort companyName ascending",
+      "resultCount": 5000,
+      "samples": 100,
+      "medianMs": 3.9973999999999705,
+      "p95Ms": 6.483699999999999,
+      "maxMs": 8.60739999999987
+    },
+    {
+      "name": "sort nullable pe descending",
+      "resultCount": 5000,
+      "samples": 100,
+      "medianMs": 4.843799999999874,
+      "p95Ms": 13.347400000000107,
+      "maxMs": 15.409200000000055
+    },
+    {
+      "name": "default chart indicators over 1260 closes",
+      "resultCount": 1260,
+      "samples": 100,
+      "medianMs": 0.09459999999990032,
+      "p95Ms": 0.13000000000010914,
+      "maxMs": 0.3445000000001528
+    }
+  ]
+}

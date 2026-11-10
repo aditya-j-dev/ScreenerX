@@ -86,10 +86,11 @@ export type FilterOperator =
   | 'startsWith';
 
 export type FilterValue = number | string | boolean | number[] | string[];
+export type FilterField = keyof Stock | 'week52HighProximity' | 'week52LowProximity';
 
 export interface FilterConfig {
   id: string;
-  field: keyof Stock;
+  field: FilterField;
   operator: FilterOperator;
   value: FilterValue;
   enabled: boolean;

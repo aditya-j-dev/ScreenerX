@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Main Flow: Open the Live Stock Screener",
+    "subtitle": "Chosen because it connects the initial 5,000-stock load, user interaction, and real-time update path.",
+    "output": "docs/diagrams/sequence.html",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "viewBox": [1250, 740],
+    "column_fit": "spread",
+    "repository": {
+      "url": "https://github.com/aditya-j-dev/ScreenerX.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "e685d9beeaad31c8bd681d30449935c616f3d188"
+    }
+  },
+  "participants": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "Browser",
+      "sublabel": "user session",
+      "sources": [{ "path": "src/app/page.tsx", "line": 1, "end_line": 5 }]
+    },
+    {
+      "id": "screener",
+      "type": "frontend",
+      "label": "Screener UI",
+      "sublabel": "client component",
+      "sources": [{ "path": "src/components/Screener.tsx", "line": 31, "end_line": 33 }]
+    },
+    {
+      "id": "datahook",
+      "type": "frontend",
+      "label": "Data hook",
+      "sublabel": "React Query",
+      "sources": [{ "path": "src/hooks/useStockData.ts", "line": 17, "end_line": 33 }]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Stocks API",
+      "sublabel": "Next route",
+      "sources": [{ "path": "src/app/api/stocks/route.ts", "line": 4, "end_line": 19 }]
+    },
+    {
+      "id": "mock",
+      "type": "backend",
+      "label": "Mock generator",
+      "sublabel": "5,000 stocks",
+      "sources": [{ "path": "src/lib/mockData.ts", "line": 208, "end_line": 306 }]
+    },
+    {
+      "id": "wshook",
+      "type": "frontend",
+      "label": "WebSocket hook",
+      "sublabel": "browser client",
+      "sources": [{ "path": "src/hooks/useWebSocket.ts", "line": 24, "end_line": 74 }]
+    },
+    {
+      "id": "wsserver",
+      "type": "backend",
+      "label": "WS simulator",
+      "sublabel": "port 3001",
+      "sources": [{ "path": "server/ws-server.ts", "line": 33, "end_line": 90 }]
+    },
+    {
+      "id": "store",
+      "type": "frontend",
+      "label": "Zustand store",
+      "sublabel": "live price Map",
+      "sources": [{ "path": "src/stores/stockStore.ts", "line": 62, "end_line": 74 }]
+    }
+  ],
+  "segments": [
+    { "from": 150, "to": 315, "label": "Initial stock universe" },
+    { "from": 325, "to": 480, "label": "Live connection" },
+    { "from": 490, "to": 630, "label": "Interactive update" }
+  ],
+  "messages": [
+    {
+      "id": "open",
+      "from": "browser",
+      "to": "screener",
+      "y": 170,
+      "label": "open page",
+      "variant": "default"
+    },
+    {
+      "id": "mount-data",
+      "from": "screener",
+      "to": "datahook",
+      "y": 200,
+      "label": "mount useStockData",
+      "variant": "emphasis"
+    },
+    {
+      "id": "get-stocks",
+      "from": "datahook",
+      "to": "api",
+      "y": 230,
+      "label": "GET /api/stocks",
+      "variant": "emphasis"
+    },
+    {
+      "id": "generate",
+      "from": "api",
+      "to": "mock",
+      "y": 260,
+      "label": "generateMockStocks(5000)",
+      "variant": "default"
+    },
+    {
+      "id": "generated",
+      "from": "mock",
+      "to": "api",
+      "y": 290,
+      "label": "generated universe",
+      "variant": "return"
+    },
+    {
+      "id": "json",
+      "from": "api",
+      "to": "datahook",
+      "y": 305,
+      "label": "JSON response",
+      "variant": "return"
+    },
+    {
+      "id": "universe",
+      "from": "datahook",
+      "to": "screener",
+      "y": 350,
+      "label": "cached stock universe",
+      "variant": "return"
+    },
+    {
+      "id": "mount-ws",
+      "from": "screener",
+      "to": "wshook",
+      "y": 390,
+      "label": "mount useRealtimeUpdates",
+      "variant": "emphasis"
+    },
+    {
+      "id": "connect",
+      "from": "wshook",
+      "to": "wsserver",
+      "y": 420,
+      "label": "connect WebSocket",
+      "variant": "default"
+    },
+    {
+      "id": "tick",
+      "from": "wsserver",
+      "to": "wshook",
+      "y": 450,
+      "label": "simulated price tick",
+      "variant": "dashed"
+    },
+    {
+      "id": "batch",
+      "from": "wshook",
+      "to": "store",
+      "y": 505,
+      "label": "batch per animation frame",
+      "variant": "dashed"
+    },
+    {
+      "id": "filter",
+      "from": "browser",
+      "to": "screener",
+      "y": 545,
+      "label": "change filter or select row",
+      "variant": "default"
+    },
+    {
+      "id": "state",
+      "from": "screener",
+      "to": "store",
+      "y": 575,
+      "label": "read/update shared state",
+      "variant": "default"
+    },
+    {
+      "id": "render",
+      "from": "screener",
+      "to": "browser",
+      "y": 610,
+      "label": "render filtered table and chart",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    { "participant": "screener", "from": 170, "to": 620, "type": "frontend" },
+    { "participant": "datahook", "from": 200, "to": 360, "type": "frontend" },
+    { "participant": "api", "from": 230, "to": 315, "type": "backend" },
+    { "participant": "mock", "from": 255, "to": 295, "type": "backend" },
+    { "participant": "wshook", "from": 390, "to": 515, "type": "frontend" },
+    { "participant": "wsserver", "from": 415, "to": 455, "type": "backend" },
+    { "participant": "store", "from": 500, "to": 585, "type": "frontend" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Why this is the main flow",
+      "items": [
+        "It shows the application’s central screening experience from page load to live update.",
+        "It joins the HTTP, WebSocket, filtering, and rendering paths without inventing an external service."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Observed behavior",
+      "items": [
+        "The initial and streamed market values are generated locally.",
+        "The history API exists, but the main Screener currently generates chart history client-side instead of calling it."
+      ]
+    }
+  ]
+}
