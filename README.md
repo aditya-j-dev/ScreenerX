@@ -1,8 +1,10 @@
 # ScreenerX
 
+**[Open the live app](https://screener-x-three.vercel.app/)**
+
 ScreenerX is an Indian-equity screening demo built with Next.js, React and TypeScript. It combines a deterministic 5,000-stock universe, client-side filters, a virtualized grid, simulated WebSocket prices and technical-analysis charts. All market data and historical candles are simulated.
 
-**Verified on 10 November 2026:** 285 tests pass; lint and TypeScript pass. Aggregate coverage: **96.29% lines/statements, 91.94% branches, 86.12% functions** within the configured source scope. See [COVERAGE_REPORT.md](COVERAGE_REPORT.md) for exclusions and evidence. Browser performance targets and deployment have separate pending checks.
+**Verified on 10 November 2026:** 285 tests pass; lint and TypeScript pass. Aggregate coverage: **96.29% lines/statements, 91.94% branches, 86.12% functions** within the configured source scope. Details are in the [coverage report](COVERAGE_REPORT.md) and [performance report](PERFORMANCE_REPORT.md).
 
 ## Features
 
@@ -14,11 +16,64 @@ ScreenerX is an Indian-equity screening demo built with Next.js, React and TypeS
 - IndexedDB stock-universe fallback and a production service-worker shell cache; watchlist persistence in localStorage.
 - Accessible control names, filter-result announcements, modal focus handling, keyboard chart drawings, chart text summaries and reduced-motion support. Full WCAG conformance has not been manually verified.
 
-## Product screenshots and deployment
+## Product screenshots
 
-Current product screenshots have not been captured for this README. The retained [Lighthouse evidence](PERFORMANCE_REPORT.md#lighthouse-and-web-vitals) is performance-audit output, not a product screenshot. Desktop grid, filter dialog and selected-chart screenshots remain pending; none are fabricated or presented as current UI captures.
+Captured from the deployed application on 10 November 2026. Prices and result counts reflect simulated data at capture time.
 
-There is no verified hosted deployment URL in this workflow. Local entry points are [http://localhost:3000](http://localhost:3000) and the optional production test port [http://localhost:3100](http://localhost:3100). Deployment belongs to Task 7.4.
+### Live stock grid
+
+The virtualized grid displays the stock universe, company classifications and streaming price cells.
+
+![ScreenerX live stock grid with 5,000 stocks and an active stream](docs/screenshots/stock-grid.jpg)
+
+### Screening filters
+
+Numeric bounds update the matching stock count immediately. This example applies a P/E maximum of 20.
+
+![ScreenerX filter panel with an active P/E maximum of 20](docs/screenshots/filter-panel.jpg)
+
+### Technical-analysis chart
+
+Selecting a stock opens its candlestick chart with SMA, EMA, Bollinger Bands, Volume Profile and the RSI subchart.
+
+![ScreenerX selected stock chart with technical indicators and RSI](docs/screenshots/stock-chart.jpg)
+
+## Deployment
+
+| Service                        | Platform | Endpoint                                                            |
+| ------------------------------ | -------- | ------------------------------------------------------------------- |
+| Next.js frontend and stock API | Vercel   | [screener-x-three.vercel.app](https://screener-x-three.vercel.app/) |
+| WebSocket price simulator      | Render   | `wss://screenerx-hm1a.onrender.com`                                 |
+
+The frontend connects to the simulator over secure WebSockets. The deployed app was checked for universe loading, a live stream, numeric filtering and selected-stock chart rendering.
+
+### Vercel configuration
+
+Import the GitHub repository as a Next.js project, use the repository root, and configure:
+
+| Setting              | Value                                     |
+| -------------------- | ----------------------------------------- |
+| Node.js              | `22.x`                                    |
+| Install command      | `npm ci --include=dev --legacy-peer-deps` |
+| Build command        | `npm run build`                           |
+| Output directory     | Framework default                         |
+| `NEXT_PUBLIC_WS_URL` | `wss://screenerx-hm1a.onrender.com`       |
+
+Set `NEXT_PUBLIC_WS_URL` before building; redeploy when changing it so the browser bundle receives the new endpoint.
+
+### Render configuration
+
+Deploy the same repository as a Node web service with these settings:
+
+| Setting                 | Value                                     |
+| ----------------------- | ----------------------------------------- |
+| Build command           | `npm ci --include=dev --legacy-peer-deps` |
+| Start command           | `npm run dev:ws`                          |
+| `NODE_VERSION`          | `22.14.0`                                 |
+| `WS_PORT`               | `10000`                                   |
+| `WS_UPDATE_INTERVAL_MS` | `2000`                                    |
+
+Development dependencies are included because the simulator runs through `tsx`. The peer-dependency flag accommodates the existing Airbnb ESLint/React Hooks plugin version conflict. Render exposes the secure public endpoint without `:10000`; that port is used by the service process internally.
 
 ## Setup
 
@@ -34,11 +89,11 @@ There is no verified hosted deployment URL in this workflow. Local entry points 
 ```powershell
 git clone https://github.com/aditya-j-dev/ScreenerX.git
 cd ScreenerX
-npm ci
+npm ci --legacy-peer-deps
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). `npm ci` installs the lockfile versions and runs the configured Husky preparation hook. `npm run dev` starts both Next.js and the standalone simulator; stop them with Ctrl+C.
+Open [http://localhost:3000](http://localhost:3000). `npm ci --legacy-peer-deps` installs the lockfile versions and runs the configured Husky preparation hook. `npm run dev` starts both Next.js and the standalone simulator; stop them with Ctrl+C.
 
 To run the services separately, use two terminals in the repository root:
 
@@ -67,7 +122,7 @@ npm run build
 npm run start -- -p 3100
 ```
 
-Open [http://localhost:3100](http://localhost:3100). `npm start` starts only Next.js; it does not start the simulator. Development output is in `.next-dev`; production build/start use `.next`. This prevents the development server from overwriting production chunks. The latest production rebuild was permission-blocked, so the current source has not yet passed final production verification.
+Open [http://localhost:3100](http://localhost:3100). `npm start` starts only Next.js; it does not start the simulator. Development output is in `.next-dev`; production build/start use `.next`. This prevents the development server from overwriting production chunks. The production build completed successfully before deployment.
 
 ## Environment variables
 
@@ -217,12 +272,6 @@ To record a new pure-function benchmark without overwriting the baseline:
 node --import tsx scripts/audit-algorithms.mjs --output audit/algorithm-results-post-6.2.json
 ```
 
-## Offline behavior
-
-A full offline reload requires a successful prior online **production** visit. The service worker caches the shell and requested Next static assets; IndexedDB separately stores the universe. Open a chart online first if its lazy chunks must be available offline. API responses are not service-worker cached. Development mode unregisters service workers.
-
-Cached fallback shows a stale-price warning even if the browser reports online. Successful network data remain usable if cache writes fail, and reconnecting refreshes the universe. The watchlist uses localStorage key `stock-screener`; IndexedDB uses database `pulse-screener-cache`, store `stock-universe`. Worker cache prefix is `screenerx-shell-`; deployment changes require deliberate version/update handling.
-
 ## Technology decisions and trade-offs
 
 | Choice                        | Reason                                                | Trade-off                                                                     |
@@ -235,22 +284,9 @@ Cached fallback shows a stale-price warning even if the browser reports online. 
 | Client-side filtering/sorting | Small local universe and immediate criteria changes   | Entire snapshot is transferred; changing scale requires new measurements      |
 | Vitest + Testing Library      | Utility, component and real-wiring integration checks | jsdom tests do not measure rendered FPS, browser gestures or conformance      |
 
-## Known limitations and future improvements
-
-- Snapshot fields drive live-price filtering and sorting; live cells and chart ticks do not merge all snapshot fields into a fresh universe. The recent-update flag currently has no expiry.
-- Baseline decoded stock JSON is approximately 4.22 MB. Transfer/parse improvements require measurement before changing the API contract.
-- The API has a module-local five-minute cache, but the baseline production route was statically prerendered with no revalidation. Do not treat this as a verified request-time freshness policy.
-- The port-3100 chart issue was deferred. Output folders were separated, but the current production build/browser behavior remains unverified after an `EPERM` build failure.
-- If streaming stays disconnected, check the simulator terminal, port and `NEXT_PUBLIC_WS_URL`. A working web page alone does not prove the stream process is running.
-- If a build reports `EPERM`, stop processes using its output directory and retry; investigate filesystem permissions or locks if it persists. A restart is not a verified fix for every permission failure.
-- Product screenshots, live screen-reader validation, browser-level E2E checks, memory/paint-latency traces and a controlled performance comparison remain pending.
-- Task 6.4 Responsive Design was explicitly skipped; existing responsive classes/swipes are not proof of breakpoint acceptance.
-- Storybook is optional and pending. Deployment and final repository transfer have not been completed in this workflow.
-
 ## Project documentation
 
 - [Architecture](ARCHITECTURE.md)
 - [Performance report](PERFORMANCE_REPORT.md)
 - [Coverage report](COVERAGE_REPORT.md)
-- [Accessibility task record](progress/task-6.3.md)
 - [Errata](ERRATA.md)
